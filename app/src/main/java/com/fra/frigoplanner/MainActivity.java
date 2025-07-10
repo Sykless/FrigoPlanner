@@ -3,6 +3,7 @@ package com.fra.frigoplanner;
 import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
+import android.util.Xml;
 import android.view.View;
 
 import androidx.activity.EdgeToEdge;
@@ -28,10 +29,19 @@ import com.google.api.services.drive.Drive;
 import com.google.api.services.drive.DriveScopes;
 import com.google.api.services.drive.model.File;
 
+import org.xmlpull.v1.XmlPullParser;
+
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -63,31 +73,30 @@ public class MainActivity extends AppCompatActivity {
 
         // Login to Google services
         ActivityResultLauncher<Intent> googleSignInLauncher = registerForActivityResult(
-            new ActivityResultContracts.StartActivityForResult(),
-            result -> {
-                if (result.getResultCode() == RESULT_OK) {
-                    Intent data = result.getData();
-                    Task<GoogleSignInAccount> task = GoogleSignIn.getSignedInAccountFromIntent(data);
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == RESULT_OK) {
+                        Intent data = result.getData();
+                        Task<GoogleSignInAccount> task = GoogleSignIn.getSignedInAccountFromIntent(data);
 
-                    try {
-                        GoogleSignInAccount account = task.getResult(ApiException.class);
+                        try {
+                            GoogleSignInAccount account = task.getResult(ApiException.class);
 
-                        GoogleAccountCredential credential = GoogleAccountCredential.usingOAuth2(
-                                this, Collections.singleton(DriveScopes.DRIVE_READONLY));
-                        credential.setSelectedAccount(account.getAccount());
+                            GoogleAccountCredential credential = GoogleAccountCredential.usingOAuth2(
+                                    this, Collections.singleton(DriveScopes.DRIVE_READONLY));
+                            credential.setSelectedAccount(account.getAccount());
 
-                        // Populate Google Drive service object
-                        driveService = new Drive.Builder(
-                                new NetHttpTransport(),
-                                JacksonFactory.getDefaultInstance(),
-                                credential
-                        ).setApplicationName("FrigoPlanner").build();
-                    }
-                    catch (ApiException e) {
-                        e.printStackTrace();
+                            // Populate Google Drive service object
+                            driveService = new Drive.Builder(
+                                    new NetHttpTransport(),
+                                    JacksonFactory.getDefaultInstance(),
+                                    credential
+                            ).setApplicationName("FrigoPlanner").build();
+                        } catch (ApiException e) {
+                            e.printStackTrace();
+                        }
                     }
                 }
-            }
         );
 
         // Launch Google login activity
@@ -97,6 +106,8 @@ public class MainActivity extends AppCompatActivity {
     public void downloadComptesFile(View button) {
         new Thread(() -> {
             try {
+                long startTime = System.currentTimeMillis();
+
                 // Retrive Comptes.ods from Google Drive
                 List<File> files = driveService.files().list()
                         .setQ("name = 'Comptes.ods' and trashed = false")
@@ -113,12 +124,140 @@ public class MainActivity extends AppCompatActivity {
                     // Download Comptes.ods from Google Drive ID
                     driveService.files().get(files.get(0).getId()).executeMediaAndDownloadTo(output);
                     output.close();
-                } else {
+
+                    processComptesFile(file);
+                    Log.d("ODS", "Total process completed in " + (System.currentTimeMillis() - startTime) + " ms");
+                }
+                else {
                     Log.e(TAG, "Comptes.ods not found in Drive");
                 }
             } catch (Exception e) {
                 Log.e(TAG, "Error loading Comptes.ods", e);
             }
         }).start();
+    }
+
+    private Map<Integer, Map<Integer, List<String>>> parseOdsFile(java.io.File odsFile) {
+
+        // Store file data in a dedicated year -> <columnId, rows> map
+        Map<Integer, Map<Integer, List<String>>> parsedFile = new HashMap<>();
+
+        // ODS files are actually zip files with data store in a content.xml
+        try (ZipFile zipFile = new ZipFile(odsFile)) {
+            ZipEntry contentFile = zipFile.getEntry("content.xml");
+
+            if (contentFile == null) {
+                Log.e("ODS", "content.xml not found");
+                return null;
+            }
+
+            // Extract content.xml file as an XML parser object
+            InputStream inputStream = zipFile.getInputStream(contentFile);
+            XmlPullParser xmlParser = Xml.newPullParser();
+            xmlParser.setInput(inputStream, "UTF-8");
+
+            // Store parse state in dedicated variables
+            int currentRow = -1;
+            int currentColumn = 0;
+
+            Map<Integer, List<String>> currentSheet = null;
+            String currentSheetName = null;
+            boolean yearSheet = false;
+
+            // Iterate on content.xml
+            while (xmlParser.next() != XmlPullParser.END_DOCUMENT) {
+                String tagName = xmlParser.getName();
+
+                // New tag : Differentiate rows, cells and other tags
+                if (xmlParser.getEventType() == XmlPullParser.START_TAG)
+                {
+                    // Sheet
+                    if ("table".equals(tagName)) {
+                        currentSheetName = xmlParser.getAttributeValue(null, "name");
+                        yearSheet = currentSheetName != null && currentSheetName.startsWith("20");
+
+                        if (yearSheet) {
+                            currentSheet = new HashMap<>();
+                            parsedFile.put(Integer.parseInt(currentSheetName), currentSheet);
+                            currentRow = -1;
+                        }
+                    }
+                    // Only parse year sheets
+                    else if (yearSheet)
+                    {
+                        // Row
+                        if ("table-row".equals(tagName)) {
+                            currentRow++;
+                            currentColumn = 0;
+                        }
+                        // Cell only before 30 columns
+                        else if ("table-cell".equals(tagName) && currentRow > 300 && currentColumn < 30) {
+                            int repeatedColumns = 1;
+                            StringBuilder cellValue = new StringBuilder();
+
+                            // Save number of repeated columns if any
+                            String repeatColumn = xmlParser.getAttributeValue(null, "number-columns-repeated");
+                            if (repeatColumn != null) {
+                                repeatedColumns = Integer.parseInt(repeatColumn);
+                            }
+
+                            // Go to next tag
+                            int parserState = xmlParser.next();
+
+                            // Retrieve cell value from text tag
+                            if ("p".equals(xmlParser.getName()) && parserState == XmlPullParser.START_TAG) {
+                                while (!(xmlParser.getEventType() == XmlPullParser.END_TAG && "p".equals(xmlParser.getName())))
+                                {
+                                    // Text with no tag : append it
+                                    if (xmlParser.getEventType() == XmlPullParser.TEXT) {
+                                        cellValue.append(xmlParser.getText());
+                                    }
+
+                                    xmlParser.next();
+                                }
+                            }
+
+                            // Add cell value to parsedFile, repeat if repeated columns
+                            for (int i = 0 ; i < repeatedColumns ; i++) {
+                                List<String> rowCells = currentSheet.computeIfAbsent(currentColumn, k -> new ArrayList<>());
+
+                                // Populate row with empty cells if not already defined
+                                while (rowCells.size() < currentRow) rowCells.add("");
+
+                                // Add cell value to target columnId/row
+                                rowCells.add(cellValue.toString().trim());
+                                currentColumn++;
+
+                                // Stop parsing after 30 columns
+                                if (currentColumn > 30) {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            inputStream.close();
+        }
+        catch (Exception e) {
+            Log.e("ODS", "Error parsing ODS", e);
+            return null;
+        }
+
+        return parsedFile;
+    }
+
+    public void processComptesFile(java.io.File odsFile) {
+        try
+        {
+            long startTime = System.currentTimeMillis();
+            Map<Integer, Map<Integer, List<String>>> parsedFile = parseOdsFile(odsFile);
+
+            Log.d("ODS", "Parse completed in " + (System.currentTimeMillis() - startTime) + " ms");
+        }
+        catch (Exception e) {
+            Log.e("ODS", "Error parsing ODS", e);
+        }
     }
 }
