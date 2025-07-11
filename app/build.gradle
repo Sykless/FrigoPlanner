@@ -50,4 +50,6 @@ dependencies {
     implementation libs.google.api.services.drive
     implementation libs.google.http.client.jackson2
     implementation(libs.poi.ooxml.lite)
+    implementation libs.room.runtime
+    annotationProcessor libs.room.compiler
 }

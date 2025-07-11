@@ -31,7 +31,6 @@ import com.google.api.services.drive.model.File;
 
 import org.xmlpull.v1.XmlPullParser;
 
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -43,9 +42,10 @@ import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
-public class MainActivity extends AppCompatActivity {
-
+public class MainActivity extends AppCompatActivity
+{
     private static final String TAG = "FrigoPlanner";
+    private static final int JANUARY = 3;
     private Drive driveService;
 
     @Override
@@ -255,6 +255,46 @@ public class MainActivity extends AppCompatActivity {
             Map<Integer, Map<Integer, List<String>>> parsedFile = parseOdsFile(odsFile);
 
             Log.d("ODS", "Parse completed in " + (System.currentTimeMillis() - startTime) + " ms");
+
+            // Find the column containing "Tickets de Caisse" by iterating on January rows
+            Map<Integer, List<String>> currentYearSheet = parsedFile.get(2025);
+            List<String> januaryRows = currentYearSheet.get(JANUARY);
+            int startingRow = -1;
+
+            for (int row = 300 ; row < januaryRows.size() && startingRow < 0 ; row++) {
+                if ("Tickets de Caisse".equals(januaryRows.get(row))) {
+                    startingRow = row + 3;
+                }
+            }
+
+            Log.i("ODS", "Products start at column " + startingRow);
+
+            final int finalStartingRow = startingRow;
+            BouffeDatabase db = BouffeDatabase.getInstance(this);
+            BouffeDao dao = db.productDao();
+
+            new Thread(() -> {
+                for (int monthCol = JANUARY; monthCol < Collections.max(currentYearSheet.keySet()); monthCol += 5) {
+                    List<String> names = currentYearSheet.get(monthCol);
+                    List<String> types = currentYearSheet.get(monthCol + 1);
+
+                    if (names == null || types == null) continue;
+
+                    int minSize = Math.min(names.size(), types.size());
+
+                    for (int row = finalStartingRow ; row < minSize ; row++) {
+                        String name = names.get(row).trim();
+                        String type = types.get(row).trim();
+
+                        if ("Bouffe - Repas".equals(type) || "Bouffe - Condiments".equals(type)) {
+                            Bouffe b = new Bouffe(2025, monthCol, row, name, type);
+                            dao.insert(b);
+                        }
+                    }
+
+                    Log.d("ODS", "Next month\n");
+                }
+            }).start();
         }
         catch (Exception e) {
             Log.e("ODS", "Error parsing ODS", e);
