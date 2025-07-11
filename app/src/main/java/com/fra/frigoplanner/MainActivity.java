@@ -201,6 +201,12 @@ public class MainActivity extends AppCompatActivity
                                 repeatedColumns = Integer.parseInt(repeatColumn);
                             }
 
+                            // Handle merged cells
+                            String mergedCell = xmlParser.getAttributeValue(null, "number-columns-spanned");
+                            if (mergedCell != null) {
+                                repeatedColumns = Math.max(repeatedColumns, Integer.parseInt(mergedCell));
+                            }
+
                             // Go to next tag
                             int parserState = xmlParser.next();
 
@@ -291,8 +297,6 @@ public class MainActivity extends AppCompatActivity
                             dao.insert(b);
                         }
                     }
-
-                    Log.d("ODS", "Next month\n");
                 }
             }).start();
         }
