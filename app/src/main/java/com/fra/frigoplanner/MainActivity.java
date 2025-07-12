@@ -190,8 +190,8 @@ public class MainActivity extends AppCompatActivity
                             currentRow++;
                             currentColumn = 0;
                         }
-                        // Cell only before 30 columns
-                        else if ("table-cell".equals(tagName) && currentRow > 300 && currentColumn < 30) {
+                        // Cell only before 65 columns
+                        else if ("table-cell".equals(tagName) && currentRow > 300 && currentColumn < 65) {
                             int repeatedColumns = 1;
                             StringBuilder cellValue = new StringBuilder();
 
@@ -259,42 +259,40 @@ public class MainActivity extends AppCompatActivity
         {
             long startTime = System.currentTimeMillis();
             Map<Integer, Map<Integer, List<String>>> parsedFile = parseOdsFile(odsFile);
-
             Log.d("ODS", "Parse completed in " + (System.currentTimeMillis() - startTime) + " ms");
 
-            // Find the column containing "Tickets de Caisse" by iterating on January rows
-            Map<Integer, List<String>> currentYearSheet = parsedFile.get(2025);
-            List<String> januaryRows = currentYearSheet.get(JANUARY);
-            int startingRow = -1;
-
-            for (int row = 300 ; row < januaryRows.size() && startingRow < 0 ; row++) {
-                if ("Tickets de Caisse".equals(januaryRows.get(row))) {
-                    startingRow = row + 3;
-                }
-            }
-
-            Log.i("ODS", "Products start at column " + startingRow);
-
-            final int finalStartingRow = startingRow;
-            BouffeDatabase db = BouffeDatabase.getInstance(this);
-            BouffeDao dao = db.productDao();
-
             new Thread(() -> {
-                for (int monthCol = JANUARY; monthCol < Collections.max(currentYearSheet.keySet()); monthCol += 5) {
-                    List<String> names = currentYearSheet.get(monthCol);
-                    List<String> types = currentYearSheet.get(monthCol + 1);
+                BouffeDatabase db = BouffeDatabase.getInstance(this);
+                BouffeDao dao = db.productDao();
 
-                    if (names == null || types == null) continue;
+                for (Map.Entry<Integer, Map<Integer, List<String>>> mapEntry : parsedFile.entrySet()) {
+                    Integer year = mapEntry.getKey();
+                    Map<Integer, List<String>> yearSheet = mapEntry.getValue();
 
-                    int minSize = Math.min(names.size(), types.size());
+                    // Find the column containing "Tickets de Caisse" by iterating on January rows
+                    List<String> januaryRows = yearSheet.get(JANUARY);
+                    int startingRow = -1;
 
-                    for (int row = finalStartingRow ; row < minSize ; row++) {
-                        String name = names.get(row).trim();
-                        String type = types.get(row).trim();
+                    for (int row = 300 ; row < januaryRows.size() && startingRow < 0 ; row++) {
+                        if ("Tickets de Caisse".equals(januaryRows.get(row))) {
+                            startingRow = row + 3;
+                        }
+                    }
 
-                        if ("Bouffe - Repas".equals(type) || "Bouffe - Condiments".equals(type)) {
-                            Bouffe b = new Bouffe(2025, monthCol, row, name, type);
-                            dao.insert(b);
+                    // Retrieve every bought food and store it in the database
+                    for (int month = 1 ; month <= 12 ; month++) {
+                        int monthCol = 5 * (month - 1) + 3;
+
+                        List<String> bouffeList = yearSheet.get(monthCol);
+                        List<String> typeList = yearSheet.get(monthCol + 1);
+
+                        for (int row = startingRow ; row < Math.min(bouffeList.size(), typeList.size()) ; row++) {
+                            String bouffeType = typeList.get(row).trim();
+
+                            if ("Bouffe - Repas".equals(bouffeType) || "Bouffe - Condiments".equals(bouffeType)) {
+                                Bouffe b = new Bouffe(year, month, row - startingRow, bouffeList.get(row).trim(), bouffeType.replace("Bouffe - ",""));
+                                dao.insert(b);
+                            }
                         }
                     }
                 }

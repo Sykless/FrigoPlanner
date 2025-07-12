@@ -12,6 +12,7 @@ class Bouffe {
     public String name;
     public String type;
     public String expirationDate;
+    public boolean eaten;
 
     public Bouffe(int year, int month, int row, String name, String type) {
         this.year = year;
@@ -19,6 +20,8 @@ class Bouffe {
         this.row = row;
         this.name = name;
         this.type = type;
+        this.expirationDate = null;
+        this.eaten = false;
     }
 }
 
@@ -34,7 +37,7 @@ interface BouffeDao {
     void clearAll();
 }
 
-@Database(entities = {Bouffe.class}, version = 1)
+@Database(entities = {Bouffe.class}, version = 2)
 public abstract class BouffeDatabase extends RoomDatabase {
     public abstract BouffeDao productDao();
 
@@ -48,7 +51,7 @@ public abstract class BouffeDatabase extends RoomDatabase {
                             context.getApplicationContext(),
                             BouffeDatabase.class,
                             "bouffe.db"
-                    ).build();
+                    ).fallbackToDestructiveMigration().build();
                 }
             }
         }
