@@ -4,22 +4,24 @@ import androidx.room.*;
 import android.content.Context;
 import java.util.List;
 
-@Entity(primaryKeys = {"year", "month", "row"})
+@Entity(primaryKeys = {"year", "month", "rowNumber"})
 class Bouffe {
     public int year;
     public int month;
-    public int row;
+    public int rowNumber;
     public String name;
     public String type;
+    public double price;
     public String expirationDate;
     public boolean eaten;
 
-    public Bouffe(int year, int month, int row, String name, String type) {
+    public Bouffe(int year, int month, int rowNumber, String name, String type, double price) {
         this.year = year;
         this.month = month;
-        this.row = row;
+        this.rowNumber = rowNumber;
         this.name = name;
         this.type = type;
+        this.price = price;
         this.expirationDate = null;
         this.eaten = false;
     }
@@ -27,17 +29,20 @@ class Bouffe {
 
 @Dao
 interface BouffeDao {
-    @Insert
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     void insert(Bouffe product);
 
     @Query("SELECT * FROM Bouffe WHERE type = :type")
     List<Bouffe> getBouffeByType(String type);
 
+    @Query("SELECT * FROM Bouffe ORDER BY year desc, month desc, rowNumber desc limit 1")
+    Bouffe getLatestBouffe();
+
     @Query("DELETE FROM Bouffe")
     void clearAll();
 }
 
-@Database(entities = {Bouffe.class}, version = 2)
+@Database(entities = {Bouffe.class}, version = 4)
 public abstract class BouffeDatabase extends RoomDatabase {
     public abstract BouffeDao productDao();
 

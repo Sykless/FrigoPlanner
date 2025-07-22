@@ -125,6 +125,8 @@ public class MainActivity extends AppCompatActivity
                     driveService.files().get(files.get(0).getId()).executeMediaAndDownloadTo(output);
                     output.close();
 
+                    Log.d("ODS", "Download completed in " + (System.currentTimeMillis() - startTime) + " ms");
+
                     processComptesFile(file);
                     Log.d("ODS", "Total process completed in " + (System.currentTimeMillis() - startTime) + " ms");
                 }
@@ -265,9 +267,26 @@ public class MainActivity extends AppCompatActivity
                 BouffeDatabase db = BouffeDatabase.getInstance(this);
                 BouffeDao dao = db.productDao();
 
+                // Default : retrieve any bouffe from after 10/2023
+                Bouffe latestBouffe = dao.getLatestBouffe();
+                int startMonth = 10;
+                int startYear = 2023;
+
+                // Data already present : only retrieve bouffe from last 6 months
+                if (latestBouffe != null) {
+                    startMonth = (latestBouffe.month - 5) % 12;
+                    startYear = latestBouffe.year - (latestBouffe.month < 6 ? 1 : 0);
+                }
+
+                // Iterate on each sheet/year
                 for (Map.Entry<Integer, Map<Integer, List<String>>> mapEntry : parsedFile.entrySet()) {
-                    Integer year = mapEntry.getKey();
                     Map<Integer, List<String>> yearSheet = mapEntry.getValue();
+                    Integer year = mapEntry.getKey();
+
+                    // Only retrieve data from years after startYear
+                    if (year < startYear) {
+                        continue;
+                    }
 
                     // Find the column containing "Tickets de Caisse" by iterating on January rows
                     List<String> januaryRows = yearSheet.get(JANUARY);
@@ -279,19 +298,39 @@ public class MainActivity extends AppCompatActivity
                         }
                     }
 
-                    // Retrieve every bought food and store it in the database
+                    // Iterate on each month
                     for (int month = 1 ; month <= 12 ; month++) {
-                        int monthCol = 5 * (month - 1) + 3;
 
+                        // Only retrieve data from months after startMonth
+                        if (year == startYear && month < startMonth) {
+                            continue;
+                        }
+
+                        int monthCol = 5 * (month - 1) + 3;
                         List<String> bouffeList = yearSheet.get(monthCol);
                         List<String> typeList = yearSheet.get(monthCol + 1);
+                        List<String> priceList = yearSheet.get(monthCol + 3);
 
-                        for (int row = startingRow ; row < Math.min(bouffeList.size(), typeList.size()) ; row++) {
-                            String bouffeType = typeList.get(row).trim();
+                        int minRowNumber = Math.min(priceList.size(), Math.min(bouffeList.size(), typeList.size()));
 
-                            if ("Bouffe - Repas".equals(bouffeType) || "Bouffe - Condiments".equals(bouffeType)) {
-                                Bouffe b = new Bouffe(year, month, row - startingRow, bouffeList.get(row).trim(), bouffeType.replace("Bouffe - ",""));
-                                dao.insert(b);
+                        // Iterate on each row
+                        for (int row = startingRow ; row < minRowNumber ; row++) {
+                            String bouffeType = typeList.get(row).replace("Bouffe - ","").trim();
+
+                            // Only retrieve bouffe you can make a dish with
+                            if ("Repas".equals(bouffeType) || "Condiments".equals(bouffeType)) {
+                                String bouffeName = bouffeList.get(row).trim();
+
+                                // Convert price from string to double
+                                String priceEuro = priceList.get(row).trim();
+                                double price = Double.parseDouble(priceEuro.replace(" €","")
+                                                                           .replace(",","."));
+
+                                // Skip bouffe with negative price (price reductions)
+                                if (price >= 0) {
+                                    Bouffe bouffe = new Bouffe(year, month, row - startingRow, bouffeName, bouffeType, price);
+                                    dao.insert(bouffe);
+                                }
                             }
                         }
                     }
@@ -299,7 +338,7 @@ public class MainActivity extends AppCompatActivity
             }).start();
         }
         catch (Exception e) {
-            Log.e("ODS", "Error parsing ODS", e);
+            Log.e("ODS", "Error parsing Comptes file", e);
         }
     }
 }
