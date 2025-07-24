@@ -1,10 +1,37 @@
 package com.fra.frigoplanner;
 
+import androidx.annotation.NonNull;
 import androidx.room.*;
 import android.content.Context;
 import java.util.List;
 
-@Entity(primaryKeys = {"year", "month", "rowNumber"})
+@Entity(
+    primaryKeys = {"name"}
+)
+class BouffeDico {
+    public String name;
+    public double averagePrice;
+    public int portions;
+    public String aisle;
+
+    public BouffeDico(String name, double averagePrice, int portions, String aisle) {
+        this.name = name;
+        this.averagePrice = averagePrice;
+        this.portions = portions;
+        this.aisle = aisle;
+    }
+}
+
+@Entity(
+    primaryKeys = {"year", "month", "rowNumber"},
+    foreignKeys = @ForeignKey(
+        entity = BouffeDico.class,
+        parentColumns = "name",
+        childColumns = "name",
+        onDelete = ForeignKey.NO_ACTION,
+        onUpdate = ForeignKey.CASCADE
+    )
+)
 class Bouffe {
     public int year;
     public int month;
@@ -42,9 +69,19 @@ interface BouffeDao {
     void clearAll();
 }
 
-@Database(entities = {Bouffe.class}, version = 4)
+@Dao
+interface BouffeDicoDao {
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    void insert(BouffeDico entry);
+
+    @Query("SELECT * FROM BouffeDico WHERE name = :name")
+    BouffeDico getByName(String name);
+}
+
+@Database(entities = {Bouffe.class, BouffeDico.class}, version = 8)
 public abstract class BouffeDatabase extends RoomDatabase {
     public abstract BouffeDao productDao();
+    public abstract BouffeDicoDao dicoDao();
 
     private static volatile BouffeDatabase INSTANCE;
 

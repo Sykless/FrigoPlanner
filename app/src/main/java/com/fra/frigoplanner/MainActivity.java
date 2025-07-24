@@ -265,10 +265,11 @@ public class MainActivity extends AppCompatActivity
 
             new Thread(() -> {
                 BouffeDatabase db = BouffeDatabase.getInstance(this);
-                BouffeDao dao = db.productDao();
+                BouffeDao bouffeDao = db.productDao();
+                BouffeDicoDao dicoDao = db.dicoDao();
 
                 // Default : retrieve any bouffe from after 10/2023
-                Bouffe latestBouffe = dao.getLatestBouffe();
+                Bouffe latestBouffe = bouffeDao.getLatestBouffe();
                 int startMonth = 10;
                 int startYear = 2023;
 
@@ -328,8 +329,11 @@ public class MainActivity extends AppCompatActivity
 
                                 // Skip bouffe with negative price (price reductions)
                                 if (price >= 0) {
+                                    BouffeDico bouffeDico = new BouffeDico(bouffeName, 0, 0, null);
+                                    dicoDao.insert(bouffeDico);
+
                                     Bouffe bouffe = new Bouffe(year, month, row - startingRow, bouffeName, bouffeType, price);
-                                    dao.insert(bouffe);
+                                    bouffeDao.insert(bouffe);
                                 }
                             }
                         }
