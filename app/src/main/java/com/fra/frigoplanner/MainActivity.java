@@ -1,19 +1,39 @@
 package com.fra.frigoplanner;
 
-import android.content.Intent;
+import android.Manifest;
+import android.annotation.SuppressLint;
+import android.content.pm.PackageManager;
+import android.graphics.Rect;
 import android.os.Bundle;
 import android.util.Log;
+import android.widget.TextView;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.camera.core.CameraSelector;
+import androidx.camera.core.ImageAnalysis;
+import androidx.camera.core.ImageProxy;
+import androidx.camera.lifecycle.ProcessCameraProvider;
+import androidx.camera.view.PreviewView;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.mlkit.vision.common.InputImage;
+import com.google.mlkit.vision.text.Text;
+import com.google.mlkit.vision.text.TextRecognition;
+import com.google.mlkit.vision.text.TextRecognizer;
+
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+import android.content.Intent;
 import android.util.Xml;
 import android.view.View;
 
 import androidx.activity.EdgeToEdge;
-import androidx.appcompat.app.AppCompatActivity;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
-
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
 
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
@@ -28,7 +48,9 @@ import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.services.drive.Drive;
 import com.google.api.services.drive.DriveScopes;
 import com.google.api.services.drive.model.File;
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 
+import org.apache.commons.text.similarity.LevenshteinDistance;
 import org.xmlpull.v1.XmlPullParser;
 
 import java.io.FileOutputStream;
@@ -47,6 +69,9 @@ public class MainActivity extends AppCompatActivity
     private static final String TAG = "FrigoPlanner";
     private static final int JANUARY = 3;
     private Drive driveService;
+    private TextView statusText;
+    private ExecutorService cameraExecutor;
+    private TextRecognizer textRecognizer;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -101,6 +126,142 @@ public class MainActivity extends AppCompatActivity
 
         // Launch Google login activity
         googleSignInLauncher.launch(client.getSignInIntent());
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+                != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, 101);
+        }
+
+        // Bind statusText view to object in the code
+        statusText = findViewById(R.id.statusText);
+
+        // Declare Camera and Text analyser objects
+        textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
+        cameraExecutor = Executors.newSingleThreadExecutor();
+
+        // Start filming
+        startCamera();
+    }
+
+    private void startCamera() {
+        ListenableFuture<ProcessCameraProvider> cameraProviderFuture =
+                ProcessCameraProvider.getInstance(this);
+
+        cameraProviderFuture.addListener(() -> {
+            try {
+                ProcessCameraProvider cameraProvider = cameraProviderFuture.get();
+                PreviewView previewView = findViewById(R.id.previewView);
+
+                // Display Camera recording in PreviewView
+                androidx.camera.core.Preview preview = new androidx.camera.core.Preview.Builder().build();
+                preview.setSurfaceProvider(previewView.getSurfaceProvider());
+
+                // Analyse camera feed in real time
+                ImageAnalysis imageAnalysis =
+                        new ImageAnalysis.Builder()
+                                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                                .build();
+                imageAnalysis.setAnalyzer(cameraExecutor, this::analyzeImage);
+
+                // Display feed from back camera
+                CameraSelector cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA;
+
+                // Make sure the camera is only used when the app is open
+                cameraProvider.unbindAll();
+                cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageAnalysis);
+            } catch (Exception e) {
+                Log.e("MLKitOCR", "Camera initialization failed.", e);
+            }
+        }, ContextCompat.getMainExecutor(this));
+    }
+
+    @SuppressLint("UnsafeOptInUsageError") // ImageProxy.getImage is experimental
+    private void analyzeImage(ImageProxy imageProxy) {
+        android.media.Image mediaImage = imageProxy.getImage();
+
+        if (mediaImage != null) {
+            InputImage image = InputImage.fromMediaImage(mediaImage, imageProxy.getImageInfo().getRotationDegrees());
+
+            // Start text processing
+            textRecognizer.process(image)
+                    .addOnSuccessListener(text -> processText(text))
+                    .addOnFailureListener(e -> Log.e("MLKitOCR", "Text recognition failed", e))
+                    .addOnCompleteListener(task -> imageProxy.close());
+        } else {
+            imageProxy.close();
+        }
+    }
+
+    private Rect retrieveTicketBorders(Text text)
+    {
+        int topBorder = -1, bottomBorder = -1;
+        int minLeft = Integer.MAX_VALUE, maxRight = Integer.MIN_VALUE;
+
+        // Make sure text is displayed to start processing
+        if (text.getTextBlocks().isEmpty()) {
+            runOnUiThread(() -> statusText.setText("Cannot find text"));
+            return null;
+        }
+
+        // Iterate on each detected block of text
+        for (Text.TextBlock block : text.getTextBlocks()) {
+            for (Text.Line line : block.getLines())
+            {
+                // Retrieve each separate line
+                String lineText = line.getText().toUpperCase();
+
+                // Detect top border from SIRET position
+                if (getLevenshteinDistance(lineText, "N SIRET: 84498809700011") >= 0.7) {
+                    topBorder = line.getBoundingBox().bottom;
+                }
+
+                // Detect bottom border from ARTICLES position
+                if (getLevenshteinDistance(lineText, "NOMBRE D'ARTICLES VENDUS") >= 0.7) {
+                    bottomBorder = line.getBoundingBox().top;
+                }
+
+                // Read each line within the borders to find the minLeft and maxRight border
+                minLeft = Math.min(minLeft, line.getBoundingBox().left);
+                maxRight = Math.max(maxRight, line.getBoundingBox().right);
+            }
+        }
+
+        // Make sure the ticket contains the word "SIRET" to detect top border
+        if (topBorder == -1) {
+            runOnUiThread(() -> statusText.setText("Cannot find SIRET"));
+            return null;
+        }
+
+        // Make sure the ticket contains the word "ARTICLES" to detect bottom border
+        if (bottomBorder == -1) {
+            runOnUiThread(() -> statusText.setText("Cannot find ARTICLES"));
+            return null;
+        }
+
+        // Save each border in a Rect object
+        return new Rect(minLeft, topBorder, maxRight, bottomBorder);
+    }
+
+    private void processText(Text text)
+    {
+        Rect borders = retrieveTicketBorders(text);
+
+        if (borders != null) {
+            statusText.setText(borders.toString());
+        }
+    }
+
+    private double getLevenshteinDistance(String text, String target) {
+        LevenshteinDistance levenshtein = LevenshteinDistance.getDefaultInstance();
+        int rawDistance = levenshtein.apply(text, target);
+        return 1.0 - (double) rawDistance / Math.max(text.length(), target.length());
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        cameraExecutor.shutdown();
+        textRecognizer.close();
     }
 
     public void downloadComptesFile(View button) {

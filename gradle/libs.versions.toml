@@ -1,5 +1,6 @@
 [versions]
 agp = "8.10.1"
+commonsText = "1.14.0"
 googleApiClientAndroid = "1.34.1"
 googleApiServicesDrive = "v3-rev20211107-1.32.1"
 googleHttpClient = "1.34.1"
@@ -13,10 +14,16 @@ constraintlayout = "2.2.1"
 playServicesAuth = "21.3.0"
 poi = "5.2.3"
 room-version = "2.6.1"
+textRecognition = "16.0.1"
+cameraCore = "1.4.2"
+cameraLifecycle = "1.4.2"
 
 [libraries]
 
 # Base libraries
+camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "cameraCore" }
+camera-view = { module = "androidx.camera:camera-view", version.ref = "cameraCore" }
+commons-text = { module = "org.apache.commons:commons-text", version.ref = "commonsText" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
@@ -37,6 +44,9 @@ poi-ooxml-lite = { group = "org.apache.poi", name = "poi-ooxml-lite", version.re
 # Database
 room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room-version" }
 room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room-version" }
+text-recognition = { module = "com.google.mlkit:text-recognition", version.ref = "textRecognition" }
+camera-core = { group = "androidx.camera", name = "camera-core", version.ref = "cameraCore" }
+camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "cameraLifecycle" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
