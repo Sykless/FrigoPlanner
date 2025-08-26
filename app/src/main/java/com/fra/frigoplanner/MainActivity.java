@@ -3,14 +3,24 @@ package com.fra.frigoplanner;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Point;
 import android.graphics.Rect;
 import android.os.Bundle;
 import android.util.Log;
+import android.util.Size;
+import android.view.Surface;
 import android.widget.TextView;
+
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.camera.core.AspectRatio;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.ImageProxy;
+import androidx.camera.core.resolutionselector.ResolutionSelector;
+import androidx.camera.core.resolutionselector.ResolutionStrategy;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
 import androidx.core.app.ActivityCompat;
@@ -21,6 +31,7 @@ import com.google.mlkit.vision.text.Text;
 import com.google.mlkit.vision.text.TextRecognition;
 import com.google.mlkit.vision.text.TextRecognizer;
 
+import java.util.Comparator;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -70,8 +81,13 @@ public class MainActivity extends AppCompatActivity
     private static final int JANUARY = 3;
     private Drive driveService;
     private TextView statusText;
+    private RectView rectView;
+    private PreviewView previewView;
     private ExecutorService cameraExecutor;
     private TextRecognizer textRecognizer;
+
+    Map<String, Integer> priceCounts = new HashMap<>();
+    int foundItems = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -133,7 +149,9 @@ public class MainActivity extends AppCompatActivity
         }
 
         // Bind statusText view to object in the code
+        previewView = findViewById(R.id.previewView);
         statusText = findViewById(R.id.statusText);
+        rectView = findViewById(R.id.rectView);
 
         // Declare Camera and Text analyser objects
         textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
@@ -150,17 +168,21 @@ public class MainActivity extends AppCompatActivity
         cameraProviderFuture.addListener(() -> {
             try {
                 ProcessCameraProvider cameraProvider = cameraProviderFuture.get();
-                PreviewView previewView = findViewById(R.id.previewView);
 
                 // Display Camera recording in PreviewView
                 androidx.camera.core.Preview preview = new androidx.camera.core.Preview.Builder().build();
                 preview.setSurfaceProvider(previewView.getSurfaceProvider());
 
                 // Analyse camera feed in real time
-                ImageAnalysis imageAnalysis =
-                        new ImageAnalysis.Builder()
-                                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                                .build();
+                ImageAnalysis imageAnalysis = new ImageAnalysis.Builder()
+                        .setResolutionSelector(
+                                new ResolutionSelector.Builder()
+                                        .setResolutionStrategy(
+                                                new ResolutionStrategy(
+                                                        new Size(1440, 1440),
+                                                        ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER)
+                                        ).build())
+                        .build();
                 imageAnalysis.setAnalyzer(cameraExecutor, this::analyzeImage);
 
                 // Display feed from back camera
@@ -184,7 +206,7 @@ public class MainActivity extends AppCompatActivity
 
             // Start text processing
             textRecognizer.process(image)
-                    .addOnSuccessListener(text -> processText(text))
+                    .addOnSuccessListener(text -> processText(imageProxy, text))
                     .addOnFailureListener(e -> Log.e("MLKitOCR", "Text recognition failed", e))
                     .addOnCompleteListener(task -> imageProxy.close());
         } else {
@@ -211,12 +233,12 @@ public class MainActivity extends AppCompatActivity
                 String lineText = line.getText().toUpperCase();
 
                 // Detect top border from SIRET position
-                if (getLevenshteinDistance(lineText, "N SIRET: 84498809700011") >= 0.7) {
+                if (getLevenshteinDistance(lineText, "N SIRET: 84498809700011") >= 0.5) {
                     topBorder = line.getBoundingBox().bottom;
                 }
 
                 // Detect bottom border from ARTICLES position
-                if (getLevenshteinDistance(lineText, "NOMBRE D'ARTICLES VENDUS") >= 0.7) {
+                if (getLevenshteinDistance(lineText, "NOMBRE D'ARTICLES VENDUS") >= 0.5) {
                     bottomBorder = line.getBoundingBox().top;
                 }
 
@@ -242,13 +264,50 @@ public class MainActivity extends AppCompatActivity
         return new Rect(minLeft, topBorder, maxRight, bottomBorder);
     }
 
-    private void processText(Text text)
+    private void processText(ImageProxy imageProxy, Text text)
     {
+        // Calculate zone in which products are listed
         Rect borders = retrieveTicketBorders(text);
 
-        if (borders != null) {
-            statusText.setText(borders.toString());
+        // Products detected : process the text
+        if (borders != null)
+        {
+            // Draw a red rectangle around the zone
+            Rect convertedRect = mapRectToView(borders,
+                    imageProxy.getWidth(), imageProxy.getHeight(),
+                    previewView.getWidth(), previewView.getHeight(),
+                    imageProxy.getImageInfo().getRotationDegrees());
+
+            rectView.setRect(convertedRect);
+            statusText.setText(foundItems + " items found");
         }
+        else {
+            rectView.setRect(null);
+        }
+    }
+
+    private Rect mapRectToView(Rect imageRect, int proxyImageWidth, int proxyImageHeight, int viewWidth, int viewHeight, int rotation)
+    {
+        // Swap width and height if the screen is rotated
+        float imageWidth = (rotation == 90 || rotation == 270) ? proxyImageHeight : proxyImageWidth;
+        float imageHeight = (rotation == 90 || rotation == 270) ? proxyImageWidth : proxyImageHeight;
+
+        // Scale height and width depending on image proxy and screen resolution
+        float scaleX = (float) viewWidth / imageWidth;
+        float scaleY = (float) viewHeight / imageHeight;
+        float scale = Math.max(scaleX, scaleY);
+
+        // Calculate offsets if image is letterboxed
+        float offsetX = (viewWidth - imageWidth * scale) / 2f;
+        float offsetY = (viewHeight - imageHeight * scale) / 2f;
+
+        // Calculate rect coordinates on view
+        int left = (int)(Math.min(imageRect.left, imageRect.right) * scale + offsetX);
+        int top = (int)(Math.min(imageRect.top, imageRect.bottom) * scale + offsetY);
+        int right = (int)(Math.max(imageRect.left, imageRect.right) * scale + offsetX);
+        int bottom = (int)(Math.max(imageRect.top, imageRect.bottom) * scale + offsetY);
+
+        return new Rect(left, top, right, bottom);
     }
 
     private double getLevenshteinDistance(String text, String target) {
