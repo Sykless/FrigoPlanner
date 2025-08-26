@@ -232,9 +232,21 @@ public class MainActivity extends AppCompatActivity
                 // Retrieve each separate line
                 String lineText = line.getText().toUpperCase();
 
-                // Detect top border from SIRET position
+                // Detect top border from SIRET position and calculate angle
                 if (getLevenshteinDistance(lineText, "N SIRET: 84498809700011") >= 0.5) {
                     topBorder = line.getBoundingBox().bottom;
+
+                    // Calculate letters orientation
+                    Point[] corners = line.getCornerPoints();
+                    double angleRad = Math.atan2(corners[2].y - corners[3].y, corners[2].x - corners[3].x);
+                    int rawAngleDeg = (int) Math.toDegrees(angleRad);
+                    int angle = rawAngleDeg + (rawAngleDeg < -45 ? 90 : 0);
+
+                    // If the letters are not straight enough, display an error
+                    if (angle > 3) {
+                        runOnUiThread(() -> statusText.setText("Angle de " + angle + "° trop élevé"));
+                        return null;
+                    }
                 }
 
                 // Detect bottom border from ARTICLES position
