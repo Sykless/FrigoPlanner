@@ -334,18 +334,15 @@ public class TicketReader extends AppCompatActivity {
                 // Every product has been validated : return to previous menu
                 if (validatedProducts == productNameList.size()) {
                     runOnUiThread(() -> {
-                        ArrayList<String> nameList = new ArrayList<>();
-                        ArrayList<String> priceList = new ArrayList<>();
+                        ArrayList<Product> productList = new ArrayList<>();
 
-                        for (Product product : groceries.getProductList()) {
-                            nameList.add(product.getValidatedName());
-                            priceList.add(product.getValidatedPrice());
+                        for (TicketProduct ticketProduct : groceries.getProductList()) {
+                            productList.add(ticketProduct.createValidatedProduct());
                         }
 
                         // Send product names and prices and go back to previous mennu
                         Intent intent = new Intent(this, MainActivity.class);
-                        intent.putStringArrayListExtra("nameList", nameList);
-                        intent.putStringArrayListExtra("priceList", priceList);
+                        intent.putParcelableArrayListExtra("productList", productList);
                         setResult(RESULT_OK, intent);
                         finish();
                     });

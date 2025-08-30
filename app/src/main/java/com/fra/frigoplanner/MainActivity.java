@@ -376,8 +376,7 @@ public class MainActivity extends AppCompatActivity
         super.onActivityResult(requestCode, resultCode, data);
 
         if (requestCode == 1001 && resultCode == RESULT_OK && data != null) {
-            ArrayList<String> nameList = data.getStringArrayListExtra("nameList");
-            ArrayList<String> priceList = data.getStringArrayListExtra("priceList");
+            ArrayList<Product> products = getIntent().getParcelableArrayListExtra("productList", Product.class);
         }
     }
 }

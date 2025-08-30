@@ -1,6 +1,6 @@
 package com.fra.frigoplanner;
 
-import android.os.Bundle;
+import android.os.Parcel;
 import android.os.Parcelable;
 
 import java.util.ArrayList;
@@ -10,12 +10,12 @@ import java.util.Map;
 
 public class Groceries
 {
-    private final List<Product> productList = new ArrayList<>();
+    private final List<TicketProduct> ticketProductList = new ArrayList<>();
     private int numberOfOcurrences = 0;
 
     Groceries(int listSize) {
         for (int i = 0 ; i < listSize ; i++) {
-            productList.add(new Product());
+            ticketProductList.add(new TicketProduct());
         }
     }
 
@@ -25,24 +25,28 @@ public class Groceries
 
     public boolean addProduct(int productId, String productName, String productPrice)
     {
-        Product targetProduct = this.productList.get(productId);
+        TicketProduct targetProduct = this.ticketProductList.get(productId);
         targetProduct.addNameCandidate(productName);
         targetProduct.addPriceCandidate(productPrice);
         return targetProduct.isValidated();
     }
 
-    public List<Product> getProductList() {
-        return productList;
+    public List<TicketProduct> getProductList() {
+        return ticketProductList;
     }
 }
 
-class Product
+class TicketProduct
 {
     private final Map<String, Integer> possibleNames = new HashMap<>();
     private final Map<String, Integer> possiblePrices = new HashMap<>();
 
     private String validatedName = null;
     private String validatedPrice = null;
+
+    public Product createValidatedProduct() {
+        return new Product(this.validatedName, this.validatedPrice);
+    }
 
     public void addNameCandidate(String name)
     {
@@ -86,5 +90,44 @@ class Product
 
     public String getValidatedPrice() {
         return validatedPrice;
+    }
+}
+
+class Product implements Parcelable
+{
+    private String productName = null;
+    private String productPrice = null;
+
+    public Product(String productName, String productPrice) {
+        this.productName = productName;
+        this.productPrice = productPrice;
+    }
+
+    protected Product(Parcel in) {
+        productName = in.readString();
+        productPrice = in.readString();
+    }
+
+    public static final Creator<Product> CREATOR = new Creator<Product>() {
+        @Override
+        public Product createFromParcel(Parcel in) {
+            return new Product(in);
+        }
+
+        @Override
+        public Product[] newArray(int size) {
+            return new Product[size];
+        }
+    };
+
+    @Override
+    public int describeContents() {
+        return 0;
+    }
+
+    @Override
+    public void writeToParcel(Parcel parcel, int flags) {
+        parcel.writeString(productName);
+        parcel.writeString(productPrice);
     }
 }
