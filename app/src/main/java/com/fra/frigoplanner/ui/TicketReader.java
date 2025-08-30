@@ -1,4 +1,4 @@
-package com.fra.frigoplanner;
+package com.fra.frigoplanner.ui;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
@@ -31,6 +31,13 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
+import com.fra.frigoplanner.data.db.BouffeDatabase;
+import com.fra.frigoplanner.data.db.dao.BouffeDicoDao;
+import com.fra.frigoplanner.R;
+import com.fra.frigoplanner.data.model.Groceries;
+import com.fra.frigoplanner.data.model.Product;
+import com.fra.frigoplanner.data.model.TicketProduct;
+import com.fra.frigoplanner.ui.view.RectView;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.text.Text;

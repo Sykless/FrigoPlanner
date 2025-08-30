@@ -1,16 +1,19 @@
-package com.fra.frigoplanner;
+package com.fra.frigoplanner.ui;
 
 
 import android.os.Bundle;
 import android.util.Log;
-import android.widget.TextView;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.camera.view.PreviewView;
-import com.google.mlkit.vision.text.TextRecognizer;
 
-import java.util.concurrent.ExecutorService;
+import com.fra.frigoplanner.data.db.entity.Bouffe;
+import com.fra.frigoplanner.data.db.dao.BouffeDao;
+import com.fra.frigoplanner.data.db.BouffeDatabase;
+import com.fra.frigoplanner.data.db.entity.BouffeDico;
+import com.fra.frigoplanner.data.db.dao.BouffeDicoDao;
+import com.fra.frigoplanner.R;
+import com.fra.frigoplanner.data.model.Product;
 
 import android.content.Intent;
 import android.util.Xml;

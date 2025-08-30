@@ -1,4 +1,4 @@
-package com.fra.frigoplanner;
+package com.fra.frigoplanner.ui.view;
 
 import android.content.Context;
 import android.graphics.Canvas;

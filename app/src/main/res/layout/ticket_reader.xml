@@ -5,7 +5,7 @@
     android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".TicketReader">
+    tools:context=".ui.TicketReader">
 
     <androidx.camera.view.PreviewView
         android:id="@+id/previewView"
@@ -16,7 +16,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"/>
 
-    <com.fra.frigoplanner.RectView
+    <com.fra.frigoplanner.ui.view.RectView
         android:id="@+id/rectView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"/>
