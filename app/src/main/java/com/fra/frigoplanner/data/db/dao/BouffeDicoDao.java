@@ -23,6 +23,9 @@ public interface BouffeDicoDao {
     @Query("SELECT * FROM BouffeDico WHERE name = :name")
     BouffeDico getByName(String name);
 
+    @Query("SELECT * FROM BouffeDico WHERE ticketName = :ticketName")
+    BouffeDico getByTicketName(String ticketName);
+
     @Query("UPDATE BouffeDico SET averagePrice = :averagePrice WHERE name = :name")
     void updateAveragePrice(String name, double averagePrice);
 

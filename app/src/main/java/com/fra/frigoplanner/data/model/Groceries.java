@@ -14,6 +14,10 @@ public class Groceries
         }
     }
 
+    public TicketProduct getTicketProduct(int productId) {
+        return this.ticketProductList.get(productId);
+    }
+
     public void increaseOcurrences() {
         this.numberOfOcurrences++;
     }

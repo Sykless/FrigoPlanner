@@ -18,6 +18,7 @@ import com.fra.frigoplanner.data.model.Product;
 import android.content.Intent;
 import android.util.Xml;
 import android.view.View;
+import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
 import androidx.activity.result.ActivityResultLauncher;
@@ -25,7 +26,10 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
+import com.fra.frigoplanner.ui.adapter.ProductAdapter;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.gms.auth.api.signin.GoogleSignInClient;
@@ -34,17 +38,23 @@ import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.common.api.Scope;
 import com.google.android.gms.tasks.Task;
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential;
+import com.google.api.client.http.ByteArrayContent;
+import com.google.api.client.http.FileContent;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.services.drive.Drive;
 import com.google.api.services.drive.DriveScopes;
 import com.google.api.services.drive.model.File;
+import com.google.api.services.drive.model.FileList;
 
 import org.xmlpull.v1.XmlPullParser;
 
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -58,6 +68,7 @@ public class MainActivity extends AppCompatActivity
     private static final String TAG = "FrigoPlanner";
     private static final int JANUARY = 3;
     private Drive driveService;
+    List<Product> productList = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -119,7 +130,66 @@ public class MainActivity extends AppCompatActivity
         startActivityForResult(intent, 1001); // request code
     }
 
-    public void downloadComptesFile(View button) {
+    public void uploadTicketTxt(View button)
+    {
+        // Only upload ticket if products have been retrieved
+        if (productList.isEmpty()) {
+            Toast.makeText(this, "Aucun ticket à uploader", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // Call Google Drive API in a dedicated thread
+        new Thread(() -> {
+            try {
+                // Retrieve FrigoPlanner folder in Google Drive
+                FileList result = driveService.files()
+                    .list()
+                    .setQ("mimeType = 'application/vnd.google-apps.folder' and name = 'FrigoPlanner' and trashed = false")
+                    .setFields("files(id, name)")
+                    .execute();
+
+                // Upload productList content in the FrigoPlanner folder
+                if (!result.getFiles().isEmpty()) {
+                    String folderId = result.getFiles().get(0).getId();
+
+                    // Create empty file under FrigoPlanner folder
+                    File fileMetadata = new File();
+                    fileMetadata.setParents(Collections.singletonList(folderId));
+
+                    // Set file name as current timestamp
+                    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd-MM-yyyy HH-mm-ss");
+                    fileMetadata.setName(LocalDateTime.now().format(formatter)  + ".txt");
+
+                    // Set file content as productList converted to .txt data
+                    StringBuilder fileContent = new StringBuilder();
+                    productList.forEach(product -> fileContent.append(product.isTotal() ? "" : product.toString()));
+                    ByteArrayContent mediaContent = new ByteArrayContent(
+                            "text/plain",
+                            fileContent.toString().getBytes(StandardCharsets.UTF_8)
+                    );
+
+                    // Upload file in Google Drive
+                    driveService.files()
+                        .create(fileMetadata, mediaContent)
+                        .setFields("id, parents")
+                        .execute();
+
+                    // Empty productList so we can retrieve a new one
+                    productList.clear();
+
+                    // Notify the user
+                    runOnUiThread(() -> Toast.makeText(this, "Ticket uploadé !", Toast.LENGTH_SHORT).show());
+                }
+            }
+            catch (Exception e) {
+                Log.e(TAG, "Error uploading ticket on Google Drive", e);
+            }
+        }).start();
+    }
+
+    public void downloadComptesFile(View button)
+    {
+        // Call Google Drive API in a dedicated thread
         new Thread(() -> {
             try {
                 long startTime = System.currentTimeMillis();
@@ -155,8 +225,8 @@ public class MainActivity extends AppCompatActivity
         }).start();
     }
 
-    private Map<Integer, Map<Integer, List<String>>> parseOdsFile(java.io.File odsFile) {
-
+    private Map<Integer, Map<Integer, List<String>>> parseOdsFile(java.io.File odsFile)
+    {
         // Store file data in a dedicated year -> <columnId, rows> map
         Map<Integer, Map<Integer, List<String>>> parsedFile = new HashMap<>();
 
@@ -281,8 +351,7 @@ public class MainActivity extends AppCompatActivity
     }
 
     public void processComptesFile(java.io.File odsFile) {
-        try
-        {
+        try  {
             long startTime = System.currentTimeMillis();
 
             // Convert ODS file to 2D Array
@@ -378,8 +447,15 @@ public class MainActivity extends AppCompatActivity
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
+        // Retrieve productList from TicketReader activity
         if (requestCode == 1001 && resultCode == RESULT_OK && data != null) {
-            ArrayList<Product> products = getIntent().getParcelableArrayListExtra("productList", Product.class);
+            productList = data.getParcelableArrayListExtra("productList", Product.class);
+
+            // Display productList in the RecyclerView
+            RecyclerView recyclerView = findViewById(R.id.productRecyclerView);
+            recyclerView.setLayoutManager(new LinearLayoutManager(this));
+            ProductAdapter adapter = new ProductAdapter(productList);
+            recyclerView.setAdapter(adapter);
         }
     }
 }

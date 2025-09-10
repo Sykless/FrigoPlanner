@@ -34,6 +34,7 @@ import androidx.core.view.WindowInsetsCompat;
 import com.fra.frigoplanner.data.db.BouffeDatabase;
 import com.fra.frigoplanner.data.db.dao.BouffeDicoDao;
 import com.fra.frigoplanner.R;
+import com.fra.frigoplanner.data.db.entity.BouffeDico;
 import com.fra.frigoplanner.data.model.Groceries;
 import com.fra.frigoplanner.data.model.Product;
 import com.fra.frigoplanner.data.model.TicketProduct;
@@ -182,12 +183,12 @@ public class TicketReader extends AppCompatActivity {
                 String lineText = line.getText().toUpperCase();
 
                 // Detect top border from SIRET position
-                if (getLevenshteinDistance(lineText, "N SIRET: 84498809700011") >= 0.5) {
+                if (getLevenshteinDistance(lineText, "N SIRET: 84498809700011") >= 0.35) {
                     topBorder = line.getBoundingBox().bottom;
                 }
 
                 // Detect bottom border from ARTICLES position and calculate angle
-                if (getLevenshteinDistance(lineText, "NOMBRE D'ARTICLES VENDUS") >= 0.5) {
+                if (getLevenshteinDistance(lineText, "NOMBRE D'ARTICLES VENDUS") >= 0.35) {
                     bottomBorder = line.getBoundingBox().top;
 
                     // Calculate letters orientation
@@ -295,7 +296,7 @@ public class TicketReader extends AppCompatActivity {
                                 .replace(",",".");
 
                         // Save price if value is a valid price
-                        if (lineText.matches("\\d{1,3}.\\d{2}")) {
+                        if (lineText.matches("-?\\d{1,3}.\\d{2}")) {
                             productPriceList.get(currentLine).append(lineText);
                         }
                     }
@@ -310,7 +311,6 @@ public class TicketReader extends AppCompatActivity {
                 // Store product list in a global groceries list
                 Groceries groceries = groceryList.computeIfAbsent(productNameList.size(), Groceries::new);
                 groceries.increaseOcurrences();
-
                 validatedProducts = 0;
 
                 // Retrieve all possible ticket names from database
@@ -334,20 +334,81 @@ public class TicketReader extends AppCompatActivity {
                     // Find closest ticket name from database ticket dico
                     String ticketName = getClosestTicketName(lineText, ticketNameDico);
 
+                    // For lines under the format 2 X 3.45 EUR, update price for previous line
+                    if (ticketName.matches("\\d{1,2}[ ]{1,3}X[ ]{1,3}\\d{1,3}.\\d{2}[ ]{1,3}EUR")) {
+                        groceries.getTicketProduct(i - 1).addPriceCandidate(productPriceList.get(i).toString());
+                    }
+
                     // Add best match to grocery list and check if the product has been validated
                     validatedProducts += groceries.addProduct(i, ticketName, productPriceList.get(i).toString()) ? 1 : 0;
                 }
 
                 // Every product has been validated : return to previous menu
-                if (validatedProducts == productNameList.size()) {
-                    runOnUiThread(() -> {
-                        ArrayList<Product> productList = new ArrayList<>();
+                if (validatedProducts == productNameList.size())
+                {
+                    ArrayList<Product> productList = new ArrayList<>();
+                    double totalCost = 0;
+                    double totalBimpliCost = 0;
+                    double totalCardCost = 0;
+                    double productSum = 0;
+                    int totalCostId = -1;
 
-                        for (TicketProduct ticketProduct : groceries.getProductList()) {
-                            productList.add(ticketProduct.createValidatedProduct());
+                    // Convert each TicketProduct to Product objects
+                    for (int productId = 0 ; productId < groceries.getProductList().size() ; productId++)
+                    {
+                        TicketProduct ticketProduct = groceries.getProductList().get(productId);
+                        Product validatedProduct = ticketProduct.createValidatedProduct(dicoDao);
+                        productList.add(validatedProduct);
+
+                        switch (ticketProduct.getValidatedName())
+                        {
+                            case "MONTANT DU":
+                                totalCost = validatedProduct.getProductPrice();
+                                validatedProduct.setTotal(true);
+                                totalCostId = productId;
+                                break;
+
+                            case "TRD BIMPLI":
+                                totalBimpliCost = validatedProduct.getProductPrice();
+                                validatedProduct.setTicketRestaurant(true);
+                                validatedProduct.setTotal(true);
+                                break;
+
+                            case "CB SANS CONTACT":
+                            case "CB EMV":
+                                totalCardCost = validatedProduct.getProductPrice();
+                                validatedProduct.setTotal(true);
+                                break;
+
+                            default:
+                                productSum += validatedProduct.getProductPrice();
+                                break;
                         }
+                    }
 
-                        // Send product names and prices and go back to previous mennu
+                    // Check if the total matches the sum of products
+                    if (Math.abs(totalCost - totalCardCost - totalBimpliCost) > 0.01
+                            || Math.abs(totalCost - productSum) > 0.01) {
+                        productList.get(totalCostId).setMismatch(true);
+                    }
+
+                    // Detect which products were bought with Ticket Restaurant
+                    if (totalBimpliCost > 0)
+                    {
+                        // Filter out ticket totals, only keep actual products
+                        List<Product> ticketRestauList = new ArrayList<>();
+                        List<Product> filteredProductList = productList.stream()
+                                .filter(product -> !product.isTotal())
+                                .collect(Collectors.toList());
+
+                        // Find products bought with Ticket Restaurant from their price and total Ticket Restaurant price
+                        if (backtrack(filteredProductList, 0, totalBimpliCost, ticketRestauList)) {
+                            ticketRestauList.forEach(product -> product.setTicketRestaurant(true));
+                        }
+                    }
+
+                    // Send product names and prices and go back to previous menu
+                    runOnUiThread(() -> {
                         Intent intent = new Intent(this, MainActivity.class);
                         intent.putParcelableArrayListExtra("productList", productList);
                         setResult(RESULT_OK, intent);
@@ -480,6 +541,19 @@ public class TicketReader extends AppCompatActivity {
         LevenshteinDistance levenshtein = LevenshteinDistance.getDefaultInstance();
         int rawDistance = levenshtein.apply(text, target);
         return 1.0 - (double) rawDistance / Math.max(text.length(), target.length());
+    }
+
+    private boolean backtrack(List<Product> prices, int index, double remaining, List<Product> subset) {
+        if (Math.abs(remaining) < 0.001) return true;
+        if (index >= prices.size()) return false;
+
+        // include current item
+        subset.add(prices.get(index));
+        if (backtrack(prices, index + 1, remaining - prices.get(index).getProductPrice(), subset)) return true;
+
+        // exclude current item
+        subset.remove(subset.size() - 1);
+        return backtrack(prices, index + 1, remaining, subset);
     }
 
     @Override

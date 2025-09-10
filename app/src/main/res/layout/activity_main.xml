@@ -7,11 +7,18 @@
     android:layout_height="match_parent"
     tools:context=".ui.MainActivity">
 
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/productRecyclerView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:padding="16dp"/>
+
     <Button
         android:id="@+id/button"
         android:layout_width="83dp"
         android:layout_height="83dp"
-        android:onClick="downloadComptesFile"
+        android:onClick="uploadTicketTxt"
+        app:icon="@drawable/item_upload_24"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 

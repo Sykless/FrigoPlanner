@@ -1,5 +1,8 @@
 package com.fra.frigoplanner.data.model;
 
+import com.fra.frigoplanner.data.db.dao.BouffeDicoDao;
+import com.fra.frigoplanner.data.db.entity.BouffeDico;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -11,20 +14,23 @@ public class TicketProduct
     private String validatedName = null;
     private String validatedPrice = null;
 
-    public Product createValidatedProduct() {
-        return new Product(this.validatedName, this.validatedPrice);
+    public Product createValidatedProduct(BouffeDicoDao dicoDao) {
+        BouffeDico bouffeDico = dicoDao.getByTicketName(this.validatedName);
+        String productName = bouffeDico != null ? bouffeDico.name : "";
+
+        return new Product(this.validatedName,
+                Double.parseDouble(this.validatedPrice),
+                productName);
     }
 
-    public void addNameCandidate(String name)
-    {
+    public void addNameCandidate(String name) {
         if (!name.isEmpty()) {
             possibleNames.merge(name, 1, Integer::sum);
             validateNameIfStable();
         }
     }
 
-    public void addPriceCandidate(String price)
-    {
+    public void addPriceCandidate(String price) {
         if (!price.isEmpty()) {
             possiblePrices.merge(price, 1, Integer::sum);
             validatePriceIfStable();
