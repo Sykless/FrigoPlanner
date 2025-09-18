@@ -3,4 +3,5 @@
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
     <color name="yellow_ticketrestau">#FFE5E905</color>
+    <color name="grey_menu">#FFF3EDF7</color>
 </resources>

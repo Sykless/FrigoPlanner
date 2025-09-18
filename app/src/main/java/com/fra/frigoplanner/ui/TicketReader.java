@@ -34,7 +34,6 @@ import androidx.core.view.WindowInsetsCompat;
 import com.fra.frigoplanner.data.db.BouffeDatabase;
 import com.fra.frigoplanner.data.db.dao.BouffeDicoDao;
 import com.fra.frigoplanner.R;
-import com.fra.frigoplanner.data.db.entity.BouffeDico;
 import com.fra.frigoplanner.data.model.Groceries;
 import com.fra.frigoplanner.data.model.Product;
 import com.fra.frigoplanner.data.model.TicketProduct;
