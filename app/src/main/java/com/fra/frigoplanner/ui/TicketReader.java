@@ -37,6 +37,7 @@ import com.fra.frigoplanner.R;
 import com.fra.frigoplanner.data.model.Groceries;
 import com.fra.frigoplanner.data.model.Product;
 import com.fra.frigoplanner.data.model.TicketProduct;
+import com.fra.frigoplanner.data.model.TotalType;
 import com.fra.frigoplanner.ui.view.RectView;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.mlkit.vision.common.InputImage;
@@ -227,6 +228,16 @@ public class TicketReader extends AppCompatActivity {
 
     private void processText(ImageProxy imageProxy, Text text)
     {
+        // Only process text is camera is still running
+        if (cameraExecutor == null || cameraExecutor.isShutdown()) {
+            return;
+        }
+
+        // Only process text is activity is still running
+        if (isFinishing() || isDestroyed()) {
+            return;
+        }
+
         // Calculate zone in which products are listed
         Rect borders = retrieveTicketBorders(text);
 
@@ -346,11 +357,7 @@ public class TicketReader extends AppCompatActivity {
                 if (validatedProducts == productNameList.size())
                 {
                     ArrayList<Product> productList = new ArrayList<>();
-                    double totalCost = 0;
                     double totalBimpliCost = 0;
-                    double totalCardCost = 0;
-                    double productSum = 0;
-                    int totalCostId = -1;
 
                     // Convert each TicketProduct to Product objects
                     for (int productId = 0 ; productId < groceries.getProductList().size() ; productId++)
@@ -359,36 +366,26 @@ public class TicketReader extends AppCompatActivity {
                         Product validatedProduct = ticketProduct.createValidatedProduct(dicoDao);
                         productList.add(validatedProduct);
 
+                        // Tag all total and subtotals so we don't treat them as products
                         switch (ticketProduct.getValidatedName())
                         {
                             case "MONTANT DU":
-                                totalCost = validatedProduct.getProductPrice();
-                                validatedProduct.setTotal(true);
-                                totalCostId = productId;
+                                validatedProduct.setTotalType(TotalType.TOTAL);
                                 break;
 
                             case "TRD BIMPLI":
                                 totalBimpliCost = validatedProduct.getProductPrice();
-                                validatedProduct.setTicketRestaurant(true);
-                                validatedProduct.setTotal(true);
+                                validatedProduct.setTotalType(TotalType.TOTAL_TICKETRESTAURANT);
+                                break;
+
+                            case "CB EMV":
+                                validatedProduct.setTotalType(TotalType.TOTAL_CB);
                                 break;
 
                             case "CB SANS CONTACT":
-                            case "CB EMV":
-                                totalCardCost = validatedProduct.getProductPrice();
-                                validatedProduct.setTotal(true);
-                                break;
-
-                            default:
-                                productSum += validatedProduct.getProductPrice();
+                                validatedProduct.setTotalType(TotalType.TOTAL_CB_CONTACTLESS);
                                 break;
                         }
-                    }
-
-                    // Check if the total matches the sum of products
-                    if (Math.abs(totalCost - totalCardCost - totalBimpliCost) > 0.01
-                            || Math.abs(totalCost - productSum) > 0.01) {
-                        productList.get(totalCostId).setMismatch(true);
                     }
 
                     // Detect which products were bought with Ticket Restaurant
@@ -397,7 +394,7 @@ public class TicketReader extends AppCompatActivity {
                         // Filter out ticket totals, only keep actual products
                         List<Product> ticketRestauList = new ArrayList<>();
                         List<Product> filteredProductList = productList.stream()
-                                .filter(product -> !product.isTotal())
+                                .filter(product -> product.getTotalType() == null)
                                 .collect(Collectors.toList());
 
                         // Find products bought with Ticket Restaurant from their price and total Ticket Restaurant price

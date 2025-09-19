@@ -42,8 +42,9 @@ public class TicketDisplayFragment extends Fragment
     private static final String TAG = "FrigoPlanner";
     private List<Product> productList = new ArrayList<>();
     private ActivityResultLauncher<Intent> ticketReaderLauncher;
-    FloatingActionButton cameraButton;
-    ExtendedFloatingActionButton uploadButton;
+    private FloatingActionButton cameraButton;
+    private ExtendedFloatingActionButton uploadButton;
+    private ProductAdapter productAdapter;
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
@@ -60,7 +61,6 @@ public class TicketDisplayFragment extends Fragment
         });
 
         uploadButton = view.findViewById(R.id.uploadButton);
-        uploadButton.setVisibility(INVISIBLE);
         uploadButton.setOnClickListener(v -> {
             uploadTicketTxt();
         });
@@ -72,6 +72,7 @@ public class TicketDisplayFragment extends Fragment
                     if (result.getResultCode() == Activity.RESULT_OK) {
                         Intent data = result.getData();
                         productList = data.getParcelableArrayListExtra("productList", Product.class);
+                        productAdapter = new ProductAdapter(productList);
 
                         // Display upload button
                         uploadButton.setVisibility(VISIBLE);
@@ -79,7 +80,12 @@ public class TicketDisplayFragment extends Fragment
                         // Display productList in the RecyclerView
                         RecyclerView recyclerView = requireActivity().findViewById(R.id.productRecyclerView);
                         recyclerView.setLayoutManager(new LinearLayoutManager(requireActivity()));
-                        recyclerView.setAdapter(new ProductAdapter(productList));
+                        recyclerView.setAdapter(productAdapter);
+
+                        // Enable upload button if all expiration dates are set
+                        productAdapter.setOnExpirationDateChangeListener(
+                                expirationDatesSet -> uploadButton.setEnabled(expirationDatesSet)
+                        );
                     }
                 }
         );
@@ -124,7 +130,7 @@ public class TicketDisplayFragment extends Fragment
 
                     // Set file content as productList converted to .txt data
                     StringBuilder fileContent = new StringBuilder();
-                    productList.forEach(product -> fileContent.append(product.isTotal() ? "" : product.toString()));
+                    productList.forEach(product -> fileContent.append(product.getTotalType() != null ? "" : product.toString()));
                     ByteArrayContent mediaContent = new ByteArrayContent(
                             "text/plain",
                             fileContent.toString().getBytes(StandardCharsets.UTF_8)
