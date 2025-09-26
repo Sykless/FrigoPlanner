@@ -105,9 +105,9 @@ public class TicketDisplayFragment extends Fragment
                                 }
 
                                 // Enable upload button if all expiration dates are set
-                                /*productAdapter.setOnExpirationDateChangeListener(
+                                productAdapter.setOnExpirationDateChangeListener(
                                         expirationDatesSet -> uploadButton.setEnabled(expirationDatesSet)
-                                );*/
+                                );
                             });
                         }).start();
                     }
@@ -138,12 +138,13 @@ public class TicketDisplayFragment extends Fragment
             for (int productId = 0 ; productId < productList.size() ; productId++) {
                 ComptesProduct product = productList.get(productId);
 
-                // Save each ticket name in TicketNameDico to facilitate next ticket reading
-                if (product.getProductPrice() >= 0) {
+                // Iteare on each actual produt (no total, no reductions)
+                if (product.getTotalType() == null && product.getProductPrice() >= 0) {
                     String productName = product.getProductName().strip();
                     String ticketName = product.getTicketName().strip();
                     String productType = product.getProductType();
 
+                    // Save each ticket name in TicketNameDico to facilitate next ticket reading
                     if (!productName.isEmpty() && !ticketName.isEmpty())
                     {
                         // Populate ProductDico table, ignored if already present in db

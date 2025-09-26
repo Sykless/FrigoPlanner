@@ -4,6 +4,7 @@ import androidx.room.Dao;
 import androidx.room.Insert;
 import androidx.room.OnConflictStrategy;
 import androidx.room.Query;
+import androidx.room.Update;
 
 import com.fra.frigoplanner.data.db.entity.Product;
 
@@ -13,6 +14,9 @@ import java.util.List;
 public interface ProductDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     void insert(Product product);
+
+    @Update
+    void update(Product product);
 
     @Query("SELECT EXISTS(SELECT 1 FROM Product WHERE year = :year AND month = :month AND rowNumber = :rowNumber)")
     boolean exists(int year, int month, int rowNumber);

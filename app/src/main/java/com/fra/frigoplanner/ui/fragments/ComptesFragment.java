@@ -2,6 +2,7 @@ package com.fra.frigoplanner.ui.fragments;
 
 import android.os.Bundle;
 import android.util.Log;
+import android.util.Pair;
 import android.util.Xml;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -17,10 +18,12 @@ import com.fra.frigoplanner.data.db.ProductDatabase;
 import com.fra.frigoplanner.data.db.dao.ProductDao;
 import com.fra.frigoplanner.data.db.dao.ProductDicoDao;
 import com.fra.frigoplanner.data.db.dao.ProductTypeDicoDao;
+import com.fra.frigoplanner.data.db.dao.TempProductDao;
 import com.fra.frigoplanner.data.db.dao.TicketNameDicoDao;
 import com.fra.frigoplanner.data.db.entity.Product;
 import com.fra.frigoplanner.data.db.entity.ProductDico;
 import com.fra.frigoplanner.data.db.entity.ProductTypeDico;
+import com.fra.frigoplanner.data.db.entity.TempProduct;
 import com.fra.frigoplanner.data.db.entity.TicketNameDico;
 import com.fra.frigoplanner.data.drive.DriveManager;
 import com.fra.frigoplanner.ui.activities.MainActivity;
@@ -219,11 +222,14 @@ public class ComptesFragment extends Fragment
                 ProductDicoDao dicoDao = db.productDicoDao();
                 ProductTypeDicoDao productTypeDicoDao = db.productTypeDicoDao();
                 TicketNameDicoDao ticketNameDicoDao = db.ticketNameDicoDao();
+                TempProductDao tempProductDao = db.tempProductDao();
 
                 // productDao.clearAll();
                 // productTypeDicoDao.clearAll();
                 // ticketNameDicoDao.clearAll();
                 // dicoDao.clearAll();
+
+                Map<String, List<Pair<TempProduct, Product>>> tempTicket = new HashMap<>();
 
                 // Default : retrieve any product from after 10/2023
                 Product latestProduct = productDao.getLatestProduct();
@@ -270,6 +276,9 @@ public class ComptesFragment extends Fragment
                         List<String> typeList = yearSheet.get(monthCol + 1);
                         List<String> priceList = yearSheet.get(monthCol + 3);
 
+                        // Empty tempTicket since no ticket overlaps two months
+                        tempTicket.clear();
+
                         // Iterate until we reach the end of one row
                         int minRowNumber = Math.min(priceList.size(), Math.min(productList.size(), typeList.size()));
 
@@ -289,23 +298,59 @@ public class ComptesFragment extends Fragment
                                 // Skip product with negative price (price reductions)
                                 if (price >= 0)
                                 {
-                                    // Insert in ProductDico to enable foreign keys, skip if already present
-                                    ProductDico productDico = new ProductDico(productName);
-                                    dicoDao.insert(productDico);
+                                    // Only process data if product was not already added
+                                    if (!productDao.exists(year, month, row - startingRow))
+                                    {
+                                        // Insert in ProductDico to enable foreign keys, skip if already present
+                                        ProductDico productDico = new ProductDico(productName);
+                                        dicoDao.insert(productDico);
 
-                                    ProductTypeDico productTypeDico = productTypeDicoDao.getProduct(productName, productType);
+                                        ProductTypeDico productTypeDico = productTypeDicoDao.getProduct(productName, productType);
 
-                                    // Match product type with product name, increase occurrence if already present
-                                    if (productTypeDico != null) {
-                                        productTypeDicoDao.increaseOccurrence(productName, productType);
-                                    } else {
-                                        productTypeDico = new ProductTypeDico(productName, productType);
-                                        productTypeDicoDao.insert(productTypeDico);
+                                        // Match product type with product name, increase occurrence if already present
+                                        if (productTypeDico != null) {
+                                            productTypeDicoDao.increaseOccurrence(productName, productType);
+                                        } else {
+                                            productTypeDico = new ProductTypeDico(productName, productType);
+                                            productTypeDicoDao.insert(productTypeDico);
+                                        }
+
+                                        // Insert Product in database
+                                        Product product = new Product(year, month, row - startingRow, productName, productType, price);
+                                        productDao.insert(product);
+
+                                        // Retrieve all TempProducts similar to current Product (same name/type/price)
+                                        List<TempProduct> tempProducts = tempProductDao.getSimilarTempProducts(productName, productType, price);
+
+                                        // Iterate on TempProduct list to associate them to actual Products
+                                        for (TempProduct tempProduct : tempProducts) {
+                                            String ticketFileName = tempProduct.ticketFileName;
+
+                                            // Add similar product to ticketList
+                                            tempTicket.computeIfAbsent(ticketFileName, k -> new ArrayList<>())
+                                                    .add(new Pair<>(tempProduct, product));
+
+                                            // Found all products associated with temps products
+                                            if (tempTicket.get(ticketFileName).size() == tempProductDao.getTicketSize(ticketFileName))
+                                            {
+                                                // Set each Product expiration date from TempProduct
+                                                for (Pair<TempProduct, Product> productPair : tempTicket.get(ticketFileName)) {
+                                                    productPair.second.expirationDate = productPair.first.expirationDate;
+                                                    productDao.update(productPair.second);
+                                                }
+
+                                                // Products have been updated so TempProducts are no longer needed
+                                                tempProductDao.deleteTicket(ticketFileName);
+                                                tempTicket.clear();
+                                                break;
+                                            }
+                                        }
                                     }
-
-                                    Product product = new Product(year, month, row - startingRow, productName, productType, price);
-                                    productDao.insert(product);
                                 }
+                            }
+                            // Empty tempTicket on separators between Comptes.ods tickets
+                            else {
+                                tempTicket.clear();
                             }
                         }
                     }
