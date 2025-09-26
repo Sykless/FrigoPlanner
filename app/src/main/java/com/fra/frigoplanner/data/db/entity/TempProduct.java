@@ -1,10 +1,11 @@
 package com.fra.frigoplanner.data.db.entity;
 
+import androidx.annotation.NonNull;
 import androidx.room.Entity;
 import androidx.room.ForeignKey;
 
 @Entity(
-        primaryKeys = {"year", "month", "rowNumber"},
+        primaryKeys = {"ticketFileName", "productId"},
         foreignKeys = @ForeignKey(
                 entity = ProductDico.class,
                 parentColumns = "productName",
@@ -13,24 +14,20 @@ import androidx.room.ForeignKey;
                 onUpdate = ForeignKey.CASCADE
         )
 )
-public class Product {
-    public int year;
-    public int month;
-    public int rowNumber;
+public class TempProduct {
+    @NonNull
+    public String ticketFileName;
+    public int productId;
     public String productName;
     public String productType;
     public double price;
     public String expirationDate;
-    public boolean eaten;
 
-    public Product(int year, int month, int rowNumber, String productName, String productType, double price) {
-        this.year = year;
-        this.month = month;
-        this.rowNumber = rowNumber;
+    public TempProduct(@NonNull String ticketFileName, int productId, String productName, String productType, double price, String expirationDate) {
+        this.ticketFileName = ticketFileName;
+        this.productId = productId;
         this.productName = productName;
         this.productType = productType;
         this.price = price;
-        this.expirationDate = null;
-        this.eaten = false;
-    }
+        this.expirationDate = expirationDate;}
 }
