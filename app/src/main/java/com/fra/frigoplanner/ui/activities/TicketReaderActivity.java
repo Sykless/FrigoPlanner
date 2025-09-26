@@ -31,7 +31,7 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
-import com.fra.frigoplanner.data.db.BouffeDatabase;
+import com.fra.frigoplanner.data.db.ProductDatabase;
 import com.fra.frigoplanner.R;
 import com.fra.frigoplanner.data.db.dao.ProductTypeDicoDao;
 import com.fra.frigoplanner.data.db.dao.TicketNameDicoDao;
@@ -325,7 +325,7 @@ public class TicketReaderActivity extends AppCompatActivity {
                 validatedProducts = 0;
 
                 // Retrieve all possible ticket names from database
-                BouffeDatabase db = BouffeDatabase.getInstance(this);
+                ProductDatabase db = ProductDatabase.getInstance(this);
                 TicketNameDicoDao ticketDicoDao = db.ticketNameDicoDao();
                 ProductTypeDicoDao productTypeDicoDao = db.productTypeDicoDao();
                 List<String> ticketNameDico = ticketDicoDao.getAllTicketNames();

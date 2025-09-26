@@ -13,7 +13,7 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
 import com.fra.frigoplanner.R;
-import com.fra.frigoplanner.data.db.BouffeDatabase;
+import com.fra.frigoplanner.data.db.ProductDatabase;
 import com.fra.frigoplanner.data.db.dao.ProductDao;
 import com.fra.frigoplanner.data.db.dao.ProductDicoDao;
 import com.fra.frigoplanner.data.db.dao.ProductTypeDicoDao;
@@ -30,11 +30,8 @@ import com.google.gson.reflect.TypeToken;
 
 import org.xmlpull.v1.XmlPullParser;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -42,7 +39,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Executors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -218,7 +214,7 @@ public class ComptesFragment extends Fragment
             if (parsedFile != null)
             {
                 // Retrieve database objects
-                BouffeDatabase db = BouffeDatabase.getInstance(requireActivity());
+                ProductDatabase db = ProductDatabase.getInstance(requireActivity());
                 ProductDao productDao = db.productDao();
                 ProductDicoDao dicoDao = db.productDicoDao();
                 ProductTypeDicoDao productTypeDicoDao = db.productTypeDicoDao();
@@ -229,12 +225,12 @@ public class ComptesFragment extends Fragment
                 // ticketNameDicoDao.clearAll();
                 // dicoDao.clearAll();
 
-                // Default : retrieve any bouffe from after 10/2023
+                // Default : retrieve any product from after 10/2023
                 Product latestProduct = productDao.getLatestProduct();
                 int startMonth = 10;
                 int startYear = 2023;
 
-                // Data already present : only retrieve bouffe from the last 6 months
+                // Data already present : only retrieve products from the last 6 months
                 if (latestProduct != null) {
                     startMonth = (latestProduct.month - 5) % 12;
                     startYear = latestProduct.year - (latestProduct.month < 6 ? 1 : 0);
@@ -270,19 +266,19 @@ public class ComptesFragment extends Fragment
 
                         // Convert month number to column number
                         int monthCol = 5 * (month - 1) + 3;
-                        List<String> bouffeList = yearSheet.get(monthCol);
+                        List<String> productList = yearSheet.get(monthCol);
                         List<String> typeList = yearSheet.get(monthCol + 1);
                         List<String> priceList = yearSheet.get(monthCol + 3);
 
                         // Iterate until we reach the end of one row
-                        int minRowNumber = Math.min(priceList.size(), Math.min(bouffeList.size(), typeList.size()));
+                        int minRowNumber = Math.min(priceList.size(), Math.min(productList.size(), typeList.size()));
 
                         // Iterate on each row
                         for (int row = startingRow ; row < minRowNumber ; row++) {
-                            String bouffeType = typeList.get(row).trim();
-                            String bouffeName = bouffeList.get(row).trim();
+                            String productType = typeList.get(row).trim();
+                            String productName = productList.get(row).trim();
 
-                            if (!bouffeType.isEmpty() && !bouffeName.isEmpty())
+                            if (!productType.isEmpty() && !productName.isEmpty())
                             {
                                 // Convert price from string to double
                                 double price = Double.parseDouble(
@@ -290,24 +286,24 @@ public class ComptesFragment extends Fragment
                                                 .replace(" €","")
                                                 .replace(",","."));
 
-                                // Skip bouffe with negative price (price reductions)
+                                // Skip product with negative price (price reductions)
                                 if (price >= 0)
                                 {
                                     // Insert in ProductDico to enable foreign keys, skip if already present
-                                    ProductDico productDico = new ProductDico(bouffeName);
+                                    ProductDico productDico = new ProductDico(productName);
                                     dicoDao.insert(productDico);
 
-                                    ProductTypeDico productTypeDico = productTypeDicoDao.getProduct(bouffeName, bouffeType);
+                                    ProductTypeDico productTypeDico = productTypeDicoDao.getProduct(productName, productType);
 
                                     // Match product type with product name, increase occurrence if already present
                                     if (productTypeDico != null) {
-                                        productTypeDicoDao.increaseOccurrence(bouffeName, bouffeType);
+                                        productTypeDicoDao.increaseOccurrence(productName, productType);
                                     } else {
-                                        productTypeDico = new ProductTypeDico(bouffeName, bouffeType);
+                                        productTypeDico = new ProductTypeDico(productName, productType);
                                         productTypeDicoDao.insert(productTypeDico);
                                     }
 
-                                    Product product = new Product(year, month, row - startingRow, bouffeName, bouffeType, price);
+                                    Product product = new Product(year, month, row - startingRow, productName, productType, price);
                                     productDao.insert(product);
                                 }
                             }
@@ -325,7 +321,7 @@ public class ComptesFragment extends Fragment
     public void importTicketNameDico() {
         try {
             // Retrieve database objects
-            BouffeDatabase db = BouffeDatabase.getInstance(requireActivity());
+            ProductDatabase db = ProductDatabase.getInstance(requireActivity());
             TicketNameDicoDao ticketNameDicoDao = db.ticketNameDicoDao();
             ProductDicoDao productDicoDao = db.productDicoDao();
 

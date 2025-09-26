@@ -9,7 +9,6 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -21,7 +20,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import androidx.recyclerview.widget.SimpleItemAnimator;
 
 import com.fra.frigoplanner.R;
-import com.fra.frigoplanner.data.db.BouffeDatabase;
+import com.fra.frigoplanner.data.db.ProductDatabase;
 import com.fra.frigoplanner.data.db.dao.ProductDicoDao;
 import com.fra.frigoplanner.data.db.dao.ProductTypeDicoDao;
 import com.fra.frigoplanner.data.db.dao.TicketNameDicoDao;
@@ -35,18 +34,11 @@ import com.fra.frigoplanner.ui.activities.TicketReaderActivity;
 import com.fra.frigoplanner.ui.adapter.ProductAdapter;
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
-import com.google.api.client.http.ByteArrayContent;
-import com.google.api.services.drive.Drive;
-import com.google.api.services.drive.model.File;
-import com.google.api.services.drive.model.FileList;
 import com.google.gson.Gson;
 
-import java.io.FileWriter;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 public class TicketDisplayFragment extends Fragment
@@ -88,7 +80,7 @@ public class TicketDisplayFragment extends Fragment
 
                         // Run DAO query off the UI thread
                         new Thread(() -> {
-                            BouffeDatabase db = BouffeDatabase.getInstance(requireContext());
+                            ProductDatabase db = ProductDatabase.getInstance(requireContext());
                             ProductDicoDao dicoDao = db.productDicoDao();
                             List<String> productNamesDico = dicoDao.getAllProductNames();
 
@@ -130,7 +122,7 @@ public class TicketDisplayFragment extends Fragment
     {
         // Call Google Drive API and Database in a dedicated thread
         new Thread(() -> {
-            BouffeDatabase db = BouffeDatabase.getInstance(requireContext());
+            ProductDatabase db = ProductDatabase.getInstance(requireContext());
             TicketNameDicoDao ticketDicoDao = db.ticketNameDicoDao();
             ProductDicoDao productDicoDao = db.productDicoDao();
             ProductTypeDicoDao productTypeDicoDao = db.productTypeDicoDao();
@@ -201,7 +193,7 @@ public class TicketDisplayFragment extends Fragment
             String fileName = LocalDateTime.now().format(formatter)  + ".json";
 
             // Retrieve all ticket names from the database
-            BouffeDatabase db = BouffeDatabase.getInstance(requireContext());
+            ProductDatabase db = ProductDatabase.getInstance(requireContext());
             TicketNameDicoDao ticketNameDicoDao = db.ticketNameDicoDao();
             List<TicketNameDico> ticketNamesList = ticketNameDicoDao.getAll();
 

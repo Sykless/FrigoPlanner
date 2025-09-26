@@ -39,7 +39,7 @@ public class ProductEditText extends AppCompatAutoCompleteTextView {
 
     public void clearEditText(View itemView)
     {
-        // Hide BouffeDico dropdown
+        // Hide ProductDico dropdown
         this.dismissDropDown();
 
         // Hide keyboard

@@ -19,23 +19,23 @@ import com.fra.frigoplanner.data.db.entity.TempProduct;
 import com.fra.frigoplanner.data.db.entity.TicketNameDico;
 
 @Database(entities = {Product.class, ProductDico.class, ProductTypeDico.class, TicketNameDico.class, TempProduct.class}, version = 17)
-public abstract class BouffeDatabase extends RoomDatabase {
+public abstract class ProductDatabase extends RoomDatabase {
     public abstract ProductDao productDao();
     public abstract ProductDicoDao productDicoDao();
     public abstract ProductTypeDicoDao productTypeDicoDao();
     public abstract TicketNameDicoDao ticketNameDicoDao();
     public abstract TempProductDao tempProductDao();
 
-    private static volatile BouffeDatabase INSTANCE;
+    private static volatile ProductDatabase INSTANCE;
 
-    public static BouffeDatabase getInstance(Context context) {
+    public static ProductDatabase getInstance(Context context) {
         if (INSTANCE == null) {
-            synchronized (BouffeDatabase.class) {
+            synchronized (ProductDatabase.class) {
                 if (INSTANCE == null) {
                     INSTANCE = Room.databaseBuilder(
                             context.getApplicationContext(),
-                            BouffeDatabase.class,
-                            "bouffe.db"
+                            ProductDatabase.class,
+                            "product.db"
                     )
                     .fallbackToDestructiveMigration()
                     // .addMigrations(MIGRATION)
