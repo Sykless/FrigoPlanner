@@ -1,4 +1,4 @@
-package com.fra.frigoplanner.ui;
+package com.fra.frigoplanner.ui.activities;
 
 import android.content.Intent;
 import android.os.Bundle;
@@ -17,6 +17,10 @@ import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentTransaction;
 
 import com.fra.frigoplanner.R;
+import com.fra.frigoplanner.data.drive.DriveManager;
+import com.fra.frigoplanner.ui.fragments.ComptesFragment;
+import com.fra.frigoplanner.ui.fragments.PlaceholderFragment;
+import com.fra.frigoplanner.ui.fragments.TicketDisplayFragment;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.gms.auth.api.signin.GoogleSignInClient;
@@ -40,10 +44,10 @@ public class MainActivity extends AppCompatActivity
     private BottomNavigationView bottomNav;
     private Map<Integer, Fragment> fragments = new HashMap<>();
     private Fragment activeFragment;
-    private Drive driveService;
+    private DriveManager driveManager;
 
-    public Drive getDriveService() {
-        return driveService;
+    public DriveManager getDriveManager() {
+        return this.driveManager;
     }
 
     @Override
@@ -97,12 +101,16 @@ public class MainActivity extends AppCompatActivity
                             credential.setSelectedAccount(account.getAccount());
 
                             // Populate Google Drive service object
-                            driveService = new Drive.Builder(
+                            Drive driveService = new Drive.Builder(
                                     new NetHttpTransport(),
                                     JacksonFactory.getDefaultInstance(),
                                     credential
                             ).setApplicationName("FrigoPlanner").build();
-                        } catch (ApiException e) {
+
+                            // Save Google Drive service object in a DriveManager for future operations (upload/download)
+                            driveManager = new DriveManager(driveService, this);
+                        }
+                        catch (ApiException e) {
                             e.printStackTrace();
                         }
                     }

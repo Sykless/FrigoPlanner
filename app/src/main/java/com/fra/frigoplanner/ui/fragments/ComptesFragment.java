@@ -1,4 +1,4 @@
-package com.fra.frigoplanner.ui;
+package com.fra.frigoplanner.ui.fragments;
 
 import android.os.Bundle;
 import android.util.Log;
@@ -14,23 +14,35 @@ import androidx.fragment.app.Fragment;
 
 import com.fra.frigoplanner.R;
 import com.fra.frigoplanner.data.db.BouffeDatabase;
-import com.fra.frigoplanner.data.db.dao.BouffeDao;
-import com.fra.frigoplanner.data.db.dao.BouffeDicoDao;
-import com.fra.frigoplanner.data.db.entity.Bouffe;
-import com.fra.frigoplanner.data.db.entity.BouffeDico;
+import com.fra.frigoplanner.data.db.dao.ProductDao;
+import com.fra.frigoplanner.data.db.dao.ProductDicoDao;
+import com.fra.frigoplanner.data.db.dao.ProductTypeDicoDao;
+import com.fra.frigoplanner.data.db.dao.TicketNameDicoDao;
+import com.fra.frigoplanner.data.db.entity.Product;
+import com.fra.frigoplanner.data.db.entity.ProductDico;
+import com.fra.frigoplanner.data.db.entity.ProductTypeDico;
+import com.fra.frigoplanner.data.db.entity.TicketNameDico;
+import com.fra.frigoplanner.data.drive.DriveManager;
+import com.fra.frigoplanner.ui.activities.MainActivity;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
-import com.google.api.services.drive.Drive;
-import com.google.api.services.drive.model.File;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 
 import org.xmlpull.v1.XmlPullParser;
 
+import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.Type;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -57,42 +69,18 @@ public class ComptesFragment extends Fragment
 
     public void downloadComptesFile()
     {
-        // Call Google Drive API in a dedicated thread
-        new Thread(() -> {
-            try {
-                // Retrieve driveService from MainActivity
-                Drive driveService = ((MainActivity) requireActivity()).getDriveService();
+        // Call Google Drive API and Database in a dedicated thread
+        new Thread(() ->
+        {
+            // Download Comptes.ods from Google Drive
+            DriveManager driveManager = ((MainActivity) requireActivity()).getDriveManager();
+            File comptesFile = driveManager.downloadFile("Comptes.ods");
 
-                // Retrive Comptes.ods from Google Drive
-                List<File> files = driveService.files().list()
-                        .setQ("name = 'Comptes.ods' and trashed = false")
-                        .setFields("files(id, name)")
-                        .setPageSize(2)
-                        .execute()
-                        .getFiles();
+            // Process Comptes.ods file and populate database
+            processComptesFile(comptesFile);
 
-                // If a file is found, download it in app local storage
-                if (files != null && !files.isEmpty()) {
-                    java.io.File file = new java.io.File(requireActivity().getFilesDir(), "Comptes.ods");
-                    OutputStream output = new FileOutputStream(file);
-
-                    // Download Comptes.ods from Google Drive ID
-                    driveService.files().get(files.get(0).getId()).executeMediaAndDownloadTo(output);
-                    output.close();
-
-                    // Process Comptes.ods file and populate database
-                    processComptesFile(file);
-
-                    // Notify user
-                    requireActivity().runOnUiThread(() -> Toast.makeText(requireActivity(), "Comptes.ods importé avec succès", Toast.LENGTH_SHORT).show());
-                }
-                else {
-                    requireActivity().runOnUiThread(() -> Toast.makeText(requireActivity(), "Fichier Comptes.ods introuvable", Toast.LENGTH_SHORT).show());
-                }
-            } catch (Exception e) {
-                requireActivity().runOnUiThread(() -> Toast.makeText(requireActivity(), "Erreur en analysant Comptes.ods", Toast.LENGTH_SHORT).show());
-                Log.e(TAG, "Error loading Comptes.ods", e);
-            }
+            // Restore TicketNameDico backup if empty
+            importTicketNameDico();
         }).start();
     }
 
@@ -214,7 +202,8 @@ public class ComptesFragment extends Fragment
             inputStream.close();
         }
         catch (Exception e) {
-            Log.e("ODS", "Error parsing ODS", e);
+            requireActivity().runOnUiThread(() -> Toast.makeText(requireActivity(), "Error parsing Comptes file", Toast.LENGTH_SHORT).show());
+            Log.e("ODS", "Error parsing Comptes file", e);
             return null;
         }
 
@@ -226,20 +215,29 @@ public class ComptesFragment extends Fragment
             // Convert ODS file to 2D Array
             Map<Integer, Map<Integer, List<String>>> parsedFile = parseOdsFile(odsFile);
 
-            new Thread(() -> {
+            if (parsedFile != null)
+            {
+                // Retrieve database objects
                 BouffeDatabase db = BouffeDatabase.getInstance(requireActivity());
-                BouffeDao bouffeDao = db.productDao();
-                BouffeDicoDao dicoDao = db.dicoDao();
+                ProductDao productDao = db.productDao();
+                ProductDicoDao dicoDao = db.productDicoDao();
+                ProductTypeDicoDao productTypeDicoDao = db.productTypeDicoDao();
+                TicketNameDicoDao ticketNameDicoDao = db.ticketNameDicoDao();
+
+                // productDao.clearAll();
+                // productTypeDicoDao.clearAll();
+                // ticketNameDicoDao.clearAll();
+                // dicoDao.clearAll();
 
                 // Default : retrieve any bouffe from after 10/2023
-                Bouffe latestBouffe = bouffeDao.getLatestBouffe();
+                Product latestProduct = productDao.getLatestProduct();
                 int startMonth = 10;
                 int startYear = 2023;
 
                 // Data already present : only retrieve bouffe from the last 6 months
-                if (latestBouffe != null) {
-                    startMonth = (latestBouffe.month - 5) % 12;
-                    startYear = latestBouffe.year - (latestBouffe.month < 6 ? 1 : 0);
+                if (latestProduct != null) {
+                    startMonth = (latestProduct.month - 5) % 12;
+                    startYear = latestProduct.year - (latestProduct.month < 6 ? 1 : 0);
                 }
 
                 // Iterate on each sheet/year
@@ -293,21 +291,74 @@ public class ComptesFragment extends Fragment
                                                 .replace(",","."));
 
                                 // Skip bouffe with negative price (price reductions)
-                                if (price >= 0) {
-                                    BouffeDico bouffeDico = new BouffeDico(bouffeName, 0, 0, null, null);
-                                    dicoDao.insert(bouffeDico);
+                                if (price >= 0)
+                                {
+                                    // Insert in ProductDico to enable foreign keys, skip if already present
+                                    ProductDico productDico = new ProductDico(bouffeName);
+                                    dicoDao.insert(productDico);
 
-                                    Bouffe bouffe = new Bouffe(year, month, row - startingRow, bouffeName, bouffeType, price);
-                                    bouffeDao.insert(bouffe);
+                                    ProductTypeDico productTypeDico = productTypeDicoDao.getProduct(bouffeName, bouffeType);
+
+                                    // Match product type with product name, increase occurrence if already present
+                                    if (productTypeDico != null) {
+                                        productTypeDicoDao.increaseOccurrence(bouffeName, bouffeType);
+                                    } else {
+                                        productTypeDico = new ProductTypeDico(bouffeName, bouffeType);
+                                        productTypeDicoDao.insert(productTypeDico);
+                                    }
+
+                                    Product product = new Product(year, month, row - startingRow, bouffeName, bouffeType, price);
+                                    productDao.insert(product);
                                 }
                             }
                         }
                     }
                 }
-            }).start();
+            }
         }
         catch (Exception e) {
-            Log.e("ODS", "Error parsing Comptes file", e);
+            requireActivity().runOnUiThread(() -> Toast.makeText(requireActivity(), "Error processing Comptes file", Toast.LENGTH_SHORT).show());
+            Log.e("ODS", "Error processing Comptes file", e);
+        }
+    }
+
+    public void importTicketNameDico() {
+        try {
+            // Retrieve database objects
+            BouffeDatabase db = BouffeDatabase.getInstance(requireActivity());
+            TicketNameDicoDao ticketNameDicoDao = db.ticketNameDicoDao();
+            ProductDicoDao productDicoDao = db.productDicoDao();
+
+            // If TicketNameDico table is empty, restore backup from Google Drive
+            if (ticketNameDicoDao.getTicketNamesCount() == 0)
+            {
+                // Start by adding "Total" type products to ProductDico since they're manual imports
+                productDicoDao.insert(new ProductDico("Total"));
+                productDicoDao.insert(new ProductDico("Total Ticket Restaurant"));
+                productDicoDao.insert(new ProductDico("Total CB"));
+                productDicoDao.insert(new ProductDico("Total CB Sans Contact"));
+
+                // Add their ticket name equivalent
+                ticketNameDicoDao.insert(new TicketNameDico("Total", "MONTANT DU"));
+                ticketNameDicoDao.insert(new TicketNameDico("Total Ticket Restaurant", "TRD BIMPLI"));
+                ticketNameDicoDao.insert(new TicketNameDico("Total CB", "CB EMV"));
+                ticketNameDicoDao.insert(new TicketNameDico("Total CB Sans Contact", "CB SANS CONTACT"));
+
+                // Retrieve heaviest TicketNameDico backup and convert it to JSON
+                DriveManager driveManager = ((MainActivity) requireActivity()).getDriveManager();
+                File jsonBackupFile = driveManager.getHeaviestBackup();
+                String json = new String(Files.readAllBytes(jsonBackupFile.toPath()), StandardCharsets.UTF_8);
+
+                // Convert JSON data to TicketNameDico and insert it in database to fill it back
+                Gson gson = new Gson();
+                Type listType = new TypeToken<List<TicketNameDico>>() {}.getType();
+                List<TicketNameDico> entries = gson.fromJson(json, listType);
+                ticketNameDicoDao.insertAll(entries);
+            }
+        }
+        catch (Exception e) {
+            Log.e("DriveManager", "Error reading Json Backup", e);
+            requireActivity().runOnUiThread(() -> Toast.makeText(requireActivity(), "Error reading Json Backup", Toast.LENGTH_SHORT).show());
         }
     }
 }

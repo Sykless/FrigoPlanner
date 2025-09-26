@@ -6,28 +6,28 @@ import androidx.room.ForeignKey;
 @Entity(
         primaryKeys = {"year", "month", "rowNumber"},
         foreignKeys = @ForeignKey(
-                entity = BouffeDico.class,
-                parentColumns = "name",
-                childColumns = "name",
+                entity = ProductDico.class,
+                parentColumns = "productName",
+                childColumns = "productName",
                 onDelete = ForeignKey.NO_ACTION,
                 onUpdate = ForeignKey.CASCADE
         )
 )
-public class Bouffe {
+public class Product {
     public int year;
     public int month;
     public int rowNumber;
-    public String name;
+    public String productName;
     public String type;
     public double price;
     public String expirationDate;
     public boolean eaten;
 
-    public Bouffe(int year, int month, int rowNumber, String name, String type, double price) {
+    public Product(int year, int month, int rowNumber, String productName, String type, double price) {
         this.year = year;
         this.month = month;
         this.rowNumber = rowNumber;
-        this.name = name;
+        this.productName = productName;
         this.type = type;
         this.price = price;
         this.expirationDate = null;

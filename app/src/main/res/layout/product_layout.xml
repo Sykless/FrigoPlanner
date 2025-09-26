@@ -18,12 +18,22 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp"
-            android:paddingTop="6dp"
-            android:paddingBottom="4dp">
+            android:paddingEnd="12dp">
 
-            <EditText
+            <TextView
+                android:id="@+id/switchTicketName"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🔄 "
+                android:textSize="18sp"
+                android:clickable="true"
+                android:focusable="false"
+                android:focusableInTouchMode="false"
+                android:paddingStart="12dp"
+                android:paddingTop="6dp"
+                android:paddingBottom="4dp"/>
+
+            <com.fra.frigoplanner.ui.view.ProductEditText
                 android:id="@+id/productName"
                 android:background="@null"
                 android:layout_width="0dp"
@@ -36,14 +46,14 @@
                 android:textSize="18sp"
                 android:textStyle="bold"/>
 
-            <EditText
+            <com.fra.frigoplanner.ui.view.ProductEditText
                 android:id="@+id/productPrice"
                 android:background="@null"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:imeOptions="actionDone"
                 android:inputType="numberDecimal"
-                android:digits="0123456789.,"
+                android:digits="0123456789.,-"
                 android:singleLine="true"
                 android:text="0.00"
                 android:textSize="18sp"
@@ -55,7 +65,9 @@
                 android:layout_height="wrap_content"
                 android:text=" €"
                 android:textSize="18sp"
-                android:textStyle="bold"/>
+                android:textStyle="bold"
+                android:focusable="true"
+                android:focusableInTouchMode="true"/>
         </LinearLayout>
 
         <LinearLayout

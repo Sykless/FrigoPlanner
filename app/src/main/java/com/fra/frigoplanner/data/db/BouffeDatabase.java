@@ -7,15 +7,21 @@ import androidx.sqlite.db.SupportSQLiteDatabase;
 
 import android.content.Context;
 
-import com.fra.frigoplanner.data.db.dao.BouffeDao;
-import com.fra.frigoplanner.data.db.dao.BouffeDicoDao;
-import com.fra.frigoplanner.data.db.entity.Bouffe;
-import com.fra.frigoplanner.data.db.entity.BouffeDico;
+import com.fra.frigoplanner.data.db.dao.ProductDao;
+import com.fra.frigoplanner.data.db.dao.ProductDicoDao;
+import com.fra.frigoplanner.data.db.dao.TicketNameDicoDao;
+import com.fra.frigoplanner.data.db.dao.ProductTypeDicoDao;
+import com.fra.frigoplanner.data.db.entity.Product;
+import com.fra.frigoplanner.data.db.entity.ProductDico;
+import com.fra.frigoplanner.data.db.entity.ProductTypeDico;
+import com.fra.frigoplanner.data.db.entity.TicketNameDico;
 
-@Database(entities = {Bouffe.class, BouffeDico.class}, version = 9)
+@Database(entities = {Product.class, ProductDico.class, ProductTypeDico.class, TicketNameDico.class}, version = 16)
 public abstract class BouffeDatabase extends RoomDatabase {
-    public abstract BouffeDao productDao();
-    public abstract BouffeDicoDao dicoDao();
+    public abstract ProductDao productDao();
+    public abstract ProductDicoDao productDicoDao();
+    public abstract ProductTypeDicoDao productTypeDicoDao();
+    public abstract TicketNameDicoDao ticketNameDicoDao();
 
     private static volatile BouffeDatabase INSTANCE;
 
@@ -28,7 +34,8 @@ public abstract class BouffeDatabase extends RoomDatabase {
                             BouffeDatabase.class,
                             "bouffe.db"
                     )
-                    .addMigrations(MIGRATION)
+                    .fallbackToDestructiveMigration()
+                    // .addMigrations(MIGRATION)
                     .build();
                 }
             }
@@ -36,10 +43,10 @@ public abstract class BouffeDatabase extends RoomDatabase {
         return INSTANCE;
     }
 
-    static final Migration MIGRATION = new Migration(8, 9) {
+    static final Migration MIGRATION = new Migration(11, 12) {
         @Override
-        public void migrate(@NonNull SupportSQLiteDatabase database) {
-            database.execSQL("ALTER TABLE BouffeDico ADD COLUMN ticketName TEXT");
+        public void migrate(@NonNull SupportSQLiteDatabase db) {
+            db.execSQL("SELECT NULL");
         }
     };
 }

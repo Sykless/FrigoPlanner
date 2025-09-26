@@ -1,18 +1,20 @@
 package com.fra.frigoplanner.ui.adapter;
 
+import static android.graphics.Typeface.ITALIC;
+import static android.graphics.Typeface.NORMAL;
+import static android.view.View.INVISIBLE;
+import static android.view.View.VISIBLE;
+
 import android.app.DatePickerDialog;
-import android.content.Context;
 import android.graphics.Color;
 import android.graphics.Typeface;
-import android.view.KeyEvent;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.inputmethod.EditorInfo;
-import android.view.inputmethod.InputMethodManager;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
-import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
@@ -23,7 +25,8 @@ import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.fra.frigoplanner.R;
-import com.fra.frigoplanner.data.model.Product;
+import com.fra.frigoplanner.data.model.ComptesProduct;
+import com.fra.frigoplanner.ui.view.ProductEditText;
 
 import java.util.Calendar;
 import java.util.List;
@@ -31,8 +34,9 @@ import java.util.Locale;
 
 public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductViewHolder> {
 
-    private final List<Product> productList;
+    private final List<ComptesProduct> productList;
     private OnExpirationDateChangeListener listener;
+    private final List<String> productNamesDico;
     private static final String[] PRODUCT_TYPES = {
             "Bouffe - Repas",
             "Bouffe - Condiments",
@@ -49,15 +53,17 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
             "Drip",
             "Loisirs",
             "Micromaniac",
-            "Bar",
-            "Transport"};
+            "Transport",
+            "Exceptionnel",
+            "Rinçage"};
 
     public interface OnExpirationDateChangeListener {
         void onExpirationDatesSet(boolean expirationDatesSet);
     }
 
-    public ProductAdapter(List<Product> productList) {
+    public ProductAdapter(List<ComptesProduct> productList, List<String> productNamesDico) {
         this.productList = productList;
+        this.productNamesDico = productNamesDico;
     }
 
     @NonNull
@@ -70,9 +76,21 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
 
     @Override
     public void onBindViewHolder(@NonNull ProductViewHolder holder, int position) {
-        Product product = productList.get(position);
-        holder.productName.setText(product.getProductName());
+        ComptesProduct product = productList.get(position);
+
+        holder.productName.setText(product.getCurrentName());
+        holder.productName.setCandidates(productNamesDico);
+        holder.productName.setShowCandidates(true);
         holder.productPrice.setText(String.format(Locale.FRANCE, "%.2f", product.getProductPrice()));
+        holder.expirationDate.setText(product.getExpirationDate());
+        holder.expirationDate.setTypeface(null, "DD/MM/YYYY".equals(product.getExpirationDate()) ? NORMAL : ITALIC);
+        holder.productDateLayout.setVisibility(product.getExpirationDate() != null ? VISIBLE : INVISIBLE);
+
+        ArrayAdapter<String> productTypeAdapter = (ArrayAdapter<String>) holder.productTypeSpinner.getAdapter();
+        int spinnerPosition = productTypeAdapter.getPosition(product.getProductType());
+        if (spinnerPosition >= 0) {
+            holder.productTypeSpinner.setSelection(spinnerPosition);
+        }
 
         // Set red background if there's a sum mismatch
         if (product.isMismatch()) {
@@ -87,6 +105,14 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
                     ContextCompat.getColor(holder.itemView.getContext(), R.color.yellow_ticketrestau)
             );
         }
+
+        // Switch ticket or product name
+        holder.switchTicketName.setOnClickListener(v -> {
+            product.setCurrentName(holder.productName.getText().toString());
+            product.setDisplayTicketName(!product.isDisplayTicketName());
+            holder.productName.setShowCandidates(!product.isDisplayTicketName());
+            this.notifyItemChanged(position);
+        });
 
         // Display DatePicker when clicking on expiration date
         holder.expirationDate.setOnClickListener(v -> {
@@ -104,7 +130,7 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
                         // Update expiration date
                         product.setExpirationDate(date);
                         holder.expirationDate.setText(date);
-                        holder.expirationDate.setTypeface(null, Typeface.NORMAL);
+                        holder.expirationDate.setTypeface(null, NORMAL);
                         checkAllExpirationDates();
                     },
                     year, month, day
@@ -115,40 +141,40 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
         // Remove expiration date if held
         holder.expirationDate.setOnLongClickListener(view -> {
             product.setExpirationDate(null);
-            holder.productDateLayout.setVisibility(View.INVISIBLE);
+            holder.productDateLayout.setVisibility(INVISIBLE);
             checkAllExpirationDates();
             return true;
         });
 
-        // Update product price and total cost when a price EditText is updated
-        holder.productPrice.setOnEditorActionListener((v, actionId, event) -> {
-            if (actionId == EditorInfo.IME_ACTION_DONE ||
-                    event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER)
-            {
-                // Update product price and recalculate total cost
-                product.setProductPrice(Double.parseDouble(v.getText().toString().replace(',', '.')));
-                recalculateTotal();
-
-                // Hide keyboard and remove focus
-                clearEditText(v);
-                return true;
-            }
-            return false;
+        // Update product price and total cost when a price EditText is closed
+        holder.productPrice.setOnBackPressedListener(() -> {
+            product.setProductPrice(Double.parseDouble(holder.productPrice.getText().toString().replace(',', '.')));
+            holder.productPrice.clearEditText(holder.euroSymbol);
+            holder.productPrice.post(this::recalculateTotal);
         });
 
-        // Update product name when a name EditText is updated
-        holder.productName.setOnEditorActionListener((v, actionId, event) -> {
-            if (actionId == EditorInfo.IME_ACTION_DONE ||
-                    event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER)
-            {
-                // Update product name
-                product.setProductName(v.getText().toString());
+        // Update product name when a name EditText is closed
+        holder.productName.setOnBackPressedListener(() -> {
+            product.setCurrentName(holder.productName.getText().toString());
+            holder.productPrice.clearEditText(holder.euroSymbol);
+        });
 
-                // Hide keyboard and remove focus
-                clearEditText(v);
-                return true;
+        holder.productName.setOnFocusChangeListener((v, hasFocus) -> {
+            product.setCurrentName(holder.productName.getText().toString());
+            holder.productName.setFocused(hasFocus);
+        });
+
+        // Supply candidates
+        holder.productName.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void afterTextChanged(Editable s) {
+                if (holder.productName.enoughToFilter()) {
+                    holder.productName.showDropDown();
+                }
             }
-            return false;
+
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
         });
 
         // Update product type when selected on the dropdown list
@@ -157,9 +183,7 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 product.setProductType(parent.getItemAtPosition(position).toString());
             }
-
-            @Override
-            public void onNothingSelected(AdapterView<?> parent) {};
+            @Override public void onNothingSelected(AdapterView<?> parent) {};
         });
     }
 
@@ -188,7 +212,7 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
 
         // Retrieve all read totals and calculate true total cost
         for (int productId = 0 ; productId < productList.size() ; productId++) {
-            Product product = productList.get(productId);
+            ComptesProduct product = productList.get(productId);
 
             // Type of total : save it for later comparison
             if (product.getTotalType() != null) {
@@ -225,19 +249,9 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
         this.notifyItemChanged(totalCostId);
     }
 
-    private void clearEditText(View editText)
-    {
-        // Hide keyboard
-        InputMethodManager imm = (InputMethodManager) editText.getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
-        imm.hideSoftInputFromWindow(editText.getWindowToken(), 0);
-
-        // Clear focus
-        editText.clearFocus();
-    }
-
     static class ProductViewHolder extends RecyclerView.ViewHolder {
-        EditText productName, productPrice;
-        TextView expirationDate, expirationDateText;
+        ProductEditText productName, productPrice;
+        TextView expirationDate, expirationDateText, switchTicketName, euroSymbol;
         CardView productCard;
         Spinner productTypeSpinner;
         LinearLayout productDateLayout;
@@ -249,6 +263,8 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
             productCard = itemView.findViewById(R.id.productCard);
             expirationDate = itemView.findViewById(R.id.expirationDate);
             expirationDateText = itemView.findViewById(R.id.expirationDateText);
+            switchTicketName = itemView.findViewById(R.id.switchTicketName);
+            euroSymbol = itemView.findViewById(R.id.euroSymbol);
             productTypeSpinner = itemView.findViewById(R.id.productTypeSpinner);
             productDateLayout = itemView.findViewById(R.id.productDateLayout);
 

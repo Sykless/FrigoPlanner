@@ -7,7 +7,7 @@ import androidx.annotation.NonNull;
 
 import java.util.Locale;
 
-public class Product implements Parcelable
+public class ComptesProduct implements Parcelable
 {
     private String ticketName;
     private String productName;
@@ -17,23 +17,50 @@ public class Product implements Parcelable
     private TotalType totalType = null;
     private boolean ticketRestaurant = false;
     private boolean mismatch = false;
+    private boolean displayTicketName;
 
-    public Product(String ticketName, double productPrice, String productName) {
+    public ComptesProduct(String ticketName, double productPrice, String productName, String productType) {
         this.ticketName = ticketName;
         this.productPrice = productPrice;
         this.productName = productName;
+        this.productType = productType;
+        this.displayTicketName = productName.isEmpty();
     }
 
     @NonNull
     public String toString() {
-        return this.getProductName() + "\t"
+        return this.getBestProductName() + "\t"
             + (this.productType != null ? this.productType : "") + "\t"
             + (this.ticketRestaurant ? "R" : "") + "\t"
             + String.format(Locale.FRANCE, "%.2f", this.productPrice) + "\n";
     }
 
-    public String getProductName() {
+    public String getBestProductName() {
         return this.productName.isEmpty() ? this.ticketName : this.productName;
+    }
+
+    public String getCurrentName() {
+        return this.displayTicketName ? this.ticketName : this.productName;
+    }
+
+    public void setCurrentName(String name) {
+        if (this.displayTicketName) {
+            this.ticketName = name;
+        } else {
+            this.productName = name;
+        }
+    }
+
+    public String getProductName() {
+        return this.productName;
+    }
+
+    public String getTicketName() {
+        return this.ticketName;
+    }
+
+    public String getProductType() {
+        return this.productType;
     }
 
     public String getExpirationDate() {
@@ -54,6 +81,10 @@ public class Product implements Parcelable
 
     public boolean isMismatch() {
         return this.mismatch;
+    }
+
+    public boolean isDisplayTicketName() {
+        return this.displayTicketName;
     }
 
     public void setProductName(String productName) {
@@ -84,7 +115,11 @@ public class Product implements Parcelable
         this.mismatch = mismatch;
     }
 
-    protected Product(Parcel in) {
+    public void setDisplayTicketName(boolean displayTicketName) {
+        this.displayTicketName = displayTicketName;
+    }
+
+    protected ComptesProduct(Parcel in) {
         ticketName = in.readString();
         productName = in.readString();
         productType = in.readString();
@@ -92,20 +127,21 @@ public class Product implements Parcelable
         productPrice = in.readDouble();
         ticketRestaurant = in.readBoolean();
         mismatch = in.readBoolean();
+        displayTicketName = in.readBoolean();
 
         String typeName = in.readString();
         totalType = typeName == null ? null : TotalType.valueOf(typeName);
     }
 
-    public static final Creator<Product> CREATOR = new Creator<>() {
+    public static final Creator<ComptesProduct> CREATOR = new Creator<>() {
         @Override
-        public Product createFromParcel(Parcel in) {
-            return new Product(in);
+        public ComptesProduct createFromParcel(Parcel in) {
+            return new ComptesProduct(in);
         }
 
         @Override
-        public Product[] newArray(int size) {
-            return new Product[size];
+        public ComptesProduct[] newArray(int size) {
+            return new ComptesProduct[size];
         }
     };
 
@@ -123,6 +159,7 @@ public class Product implements Parcelable
         parcel.writeDouble(productPrice);
         parcel.writeBoolean(ticketRestaurant);
         parcel.writeBoolean(mismatch);
+        parcel.writeBoolean(displayTicketName);
         parcel.writeString(totalType == null ? null : totalType.name());
     }
 }

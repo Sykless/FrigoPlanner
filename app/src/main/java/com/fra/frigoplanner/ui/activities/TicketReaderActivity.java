@@ -1,4 +1,4 @@
-package com.fra.frigoplanner.ui;
+package com.fra.frigoplanner.ui.activities;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
@@ -32,10 +32,11 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
 import com.fra.frigoplanner.data.db.BouffeDatabase;
-import com.fra.frigoplanner.data.db.dao.BouffeDicoDao;
 import com.fra.frigoplanner.R;
+import com.fra.frigoplanner.data.db.dao.ProductTypeDicoDao;
+import com.fra.frigoplanner.data.db.dao.TicketNameDicoDao;
 import com.fra.frigoplanner.data.model.Groceries;
-import com.fra.frigoplanner.data.model.Product;
+import com.fra.frigoplanner.data.model.ComptesProduct;
 import com.fra.frigoplanner.data.model.TicketProduct;
 import com.fra.frigoplanner.data.model.TotalType;
 import com.fra.frigoplanner.ui.view.RectView;
@@ -60,7 +61,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
-public class TicketReader extends AppCompatActivity {
+public class TicketReaderActivity extends AppCompatActivity {
 
     private TextView statusText;
     private RectView rectView;
@@ -325,8 +326,9 @@ public class TicketReader extends AppCompatActivity {
 
                 // Retrieve all possible ticket names from database
                 BouffeDatabase db = BouffeDatabase.getInstance(this);
-                BouffeDicoDao dicoDao = db.dicoDao();
-                List<String> ticketNameDico = dicoDao.getAllTicketNames();
+                TicketNameDicoDao ticketDicoDao = db.ticketNameDicoDao();
+                ProductTypeDicoDao productTypeDicoDao = db.productTypeDicoDao();
+                List<String> ticketNameDico = ticketDicoDao.getAllTicketNames();
 
                 // Iterate over each read product name to put them together
                 for (int i = 0 ; i < productNameList.size() ; i++)
@@ -356,14 +358,14 @@ public class TicketReader extends AppCompatActivity {
                 // Every product has been validated : return to previous menu
                 if (validatedProducts == productNameList.size())
                 {
-                    ArrayList<Product> productList = new ArrayList<>();
+                    ArrayList<ComptesProduct> productList = new ArrayList<>();
                     double totalBimpliCost = 0;
 
                     // Convert each TicketProduct to Product objects
                     for (int productId = 0 ; productId < groceries.getProductList().size() ; productId++)
                     {
                         TicketProduct ticketProduct = groceries.getProductList().get(productId);
-                        Product validatedProduct = ticketProduct.createValidatedProduct(dicoDao);
+                        ComptesProduct validatedProduct = ticketProduct.createValidatedProduct(ticketDicoDao, productTypeDicoDao);
                         productList.add(validatedProduct);
 
                         // Tag all total and subtotals so we don't treat them as products
@@ -392,8 +394,8 @@ public class TicketReader extends AppCompatActivity {
                     if (totalBimpliCost > 0)
                     {
                         // Filter out ticket totals, only keep actual products
-                        List<Product> ticketRestauList = new ArrayList<>();
-                        List<Product> filteredProductList = productList.stream()
+                        List<ComptesProduct> ticketRestauList = new ArrayList<>();
+                        List<ComptesProduct> filteredProductList = productList.stream()
                                 .filter(product -> product.getTotalType() == null)
                                 .collect(Collectors.toList());
 
@@ -539,7 +541,7 @@ public class TicketReader extends AppCompatActivity {
         return 1.0 - (double) rawDistance / Math.max(text.length(), target.length());
     }
 
-    private boolean backtrack(List<Product> prices, int index, double remaining, List<Product> subset) {
+    private boolean backtrack(List<ComptesProduct> prices, int index, double remaining, List<ComptesProduct> subset) {
         if (Math.abs(remaining) < 0.001) return true;
         if (index >= prices.size()) return false;
 

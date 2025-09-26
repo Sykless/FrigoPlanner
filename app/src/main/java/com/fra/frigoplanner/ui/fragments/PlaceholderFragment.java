@@ -1,4 +1,4 @@
-package com.fra.frigoplanner.ui;
+package com.fra.frigoplanner.ui.fragments;
 
 import android.os.Bundle;
 import android.view.LayoutInflater;

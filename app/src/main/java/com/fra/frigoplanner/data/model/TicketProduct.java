@@ -1,7 +1,10 @@
 package com.fra.frigoplanner.data.model;
 
-import com.fra.frigoplanner.data.db.dao.BouffeDicoDao;
-import com.fra.frigoplanner.data.db.entity.BouffeDico;
+import com.fra.frigoplanner.data.db.dao.ProductDicoDao;
+import com.fra.frigoplanner.data.db.dao.ProductTypeDicoDao;
+import com.fra.frigoplanner.data.db.dao.TicketNameDicoDao;
+import com.fra.frigoplanner.data.db.entity.ProductDico;
+import com.fra.frigoplanner.data.db.entity.TicketNameDico;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -14,13 +17,17 @@ public class TicketProduct
     private String validatedName = null;
     private String validatedPrice = null;
 
-    public Product createValidatedProduct(BouffeDicoDao dicoDao) {
-        BouffeDico bouffeDico = dicoDao.getByTicketName(this.validatedName);
-        String productName = bouffeDico != null ? bouffeDico.name : "";
+    public ComptesProduct createValidatedProduct(TicketNameDicoDao dicoDao, ProductTypeDicoDao productTypeDicoDao) {
+        TicketNameDico productDico = dicoDao.getByTicketName(this.validatedName);
+        String productName = productDico != null ? productDico.productName : "";
 
-        return new Product(this.validatedName,
+        // Retrieve product type from database if a match has been found in ProductDico
+        String productType = productName.isEmpty() ? "Bouffe - Repas" // Default value
+                : productTypeDicoDao.getMostFrequentProductType(productName); // Take the most frequent produt type in database
+
+        return new ComptesProduct(this.validatedName,
                 Double.parseDouble(this.validatedPrice),
-                productName);
+                productName, productType);
     }
 
     public void addNameCandidate(String name) {
