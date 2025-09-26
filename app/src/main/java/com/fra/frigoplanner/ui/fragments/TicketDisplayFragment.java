@@ -23,9 +23,11 @@ import com.fra.frigoplanner.R;
 import com.fra.frigoplanner.data.db.ProductDatabase;
 import com.fra.frigoplanner.data.db.dao.ProductDicoDao;
 import com.fra.frigoplanner.data.db.dao.ProductTypeDicoDao;
+import com.fra.frigoplanner.data.db.dao.TempProductDao;
 import com.fra.frigoplanner.data.db.dao.TicketNameDicoDao;
 import com.fra.frigoplanner.data.db.entity.ProductDico;
 import com.fra.frigoplanner.data.db.entity.ProductTypeDico;
+import com.fra.frigoplanner.data.db.entity.TempProduct;
 import com.fra.frigoplanner.data.db.entity.TicketNameDico;
 import com.fra.frigoplanner.data.drive.DriveManager;
 import com.fra.frigoplanner.data.model.ComptesProduct;
@@ -126,10 +128,16 @@ public class TicketDisplayFragment extends Fragment
             TicketNameDicoDao ticketDicoDao = db.ticketNameDicoDao();
             ProductDicoDao productDicoDao = db.productDicoDao();
             ProductTypeDicoDao productTypeDicoDao = db.productTypeDicoDao();
+            TempProductDao tempProductDao = db.tempProductDao();
+
+            // Save timestamp for future file names
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd-MM-yyyy HH-mm-ss");
+            String fileName = LocalDateTime.now().format(formatter);
 
             // Add every ticket name in the TicketNameDico table
-            for (ComptesProduct product : productList)
-            {
+            for (int productId = 0 ; productId < productList.size() ; productId++) {
+                ComptesProduct product = productList.get(productId);
+
                 // Save each ticket name in TicketNameDico to facilitate next ticket reading
                 if (product.getProductPrice() >= 0) {
                     String productName = product.getProductName().strip();
@@ -155,15 +163,20 @@ public class TicketDisplayFragment extends Fragment
                         // Populate TicketNameDico table, ignored if already present in db
                         TicketNameDico ticketDico = new TicketNameDico(productName, ticketName);
                         ticketDicoDao.insert(ticketDico);
+
+                        // Populate TempProduct table for future adding to Product table
+                        TempProduct tempProduct = new TempProduct(fileName, productId,
+                                productName, productType, product.getProductPrice(), product.getExpirationDate());
+                        tempProductDao.insert(tempProduct);
                     }
                 }
             }
 
             // Upload ticket as txt manually importable in Comptes.ods
-            uploadTicketTxt();
+            uploadTicketTxt(fileName);
 
             // Upload TicketNameDico to backup ticket names
-            backupTicketNames();
+            backupTicketNames(fileName);
 
             // Empty productList so we can retrieve a new one
             productList.clear();
@@ -171,27 +184,19 @@ public class TicketDisplayFragment extends Fragment
         }).start();
     }
 
-    public void uploadTicketTxt()
+    public void uploadTicketTxt(String fileName)
     {
-        // Set file name as current timestamp
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd-MM-yyyy HH-mm-ss");
-        String fileName = LocalDateTime.now().format(formatter)  + ".txt";
-
         // Set file content as productList converted to .txt data
         StringBuilder fileContent = new StringBuilder();
         productList.forEach(product -> fileContent.append(product.getTotalType() != null ? "" : product.toString()));
 
         // Upload ticket file in Google Drive
         DriveManager driveManager = ((MainActivity) requireActivity()).getDriveManager();
-        driveManager.uploadFile("Tickets", fileName, fileContent.toString());
+        driveManager.uploadFile("Tickets", fileName + ".txt", fileContent.toString());
     }
 
-    public void backupTicketNames() {
+    public void backupTicketNames(String fileName) {
         try {
-            // Set backup file name as current timestamp
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd-MM-yyyy HH-mm-ss");
-            String fileName = LocalDateTime.now().format(formatter)  + ".json";
-
             // Retrieve all ticket names from the database
             ProductDatabase db = ProductDatabase.getInstance(requireContext());
             TicketNameDicoDao ticketNameDicoDao = db.ticketNameDicoDao();
@@ -203,7 +208,7 @@ public class TicketDisplayFragment extends Fragment
 
             // Upload backup file in Google Drive
             DriveManager driveManager = ((MainActivity) requireActivity()).getDriveManager();
-            driveManager.uploadFile("Backup", fileName, json);
+            driveManager.uploadFile("Backup", fileName + ".json", json);
         }
         catch (Exception e) {
             Log.e("TicketDisplayFragment", "Error exporting TicketNameDico", e);
