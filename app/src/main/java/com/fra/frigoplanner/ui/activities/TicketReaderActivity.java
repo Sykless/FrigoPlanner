@@ -449,21 +449,6 @@ public class TicketReaderActivity extends AppCompatActivity {
                         }
                     }
 
-                    // Detect which products were bought with Ticket Restaurant
-                    if (totalBimpliCost > 0)
-                    {
-                        // Filter out ticket totals, only keep actual products
-                        List<ComptesProduct> ticketRestauList = new ArrayList<>();
-                        List<ComptesProduct> filteredProductList = productList.stream()
-                                .filter(product -> product.getTotalType() == null)
-                                .collect(Collectors.toList());
-
-                        // Find products bought with Ticket Restaurant from their price and total Ticket Restaurant price
-                        if (backtrack(filteredProductList, 0, totalBimpliCost, ticketRestauList)) {
-                            ticketRestauList.forEach(product -> product.setTicketRestaurant(true));
-                        }
-                    }
-
                     // Send product names and prices and go back to previous menu
                     runOnUiThread(() -> {
                         Intent intent = new Intent(this, MainActivity.class);
@@ -598,19 +583,6 @@ public class TicketReaderActivity extends AppCompatActivity {
         LevenshteinDistance levenshtein = LevenshteinDistance.getDefaultInstance();
         int rawDistance = levenshtein.apply(text, target);
         return 1.0 - (double) rawDistance / Math.max(text.length(), target.length());
-    }
-
-    private boolean backtrack(List<ComptesProduct> prices, int index, double remaining, List<ComptesProduct> subset) {
-        if (Math.abs(remaining) < 0.001) return true;
-        if (index >= prices.size()) return false;
-
-        // include current item
-        subset.add(prices.get(index));
-        if (backtrack(prices, index + 1, remaining - prices.get(index).getProductPrice(), subset)) return true;
-
-        // exclude current item
-        subset.remove(subset.size() - 1);
-        return backtrack(prices, index + 1, remaining, subset);
     }
 
     @Override

@@ -28,9 +28,11 @@ import com.fra.frigoplanner.R;
 import com.fra.frigoplanner.data.model.ComptesProduct;
 import com.fra.frigoplanner.ui.view.ProductEditText;
 
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 import java.util.Locale;
+import java.util.stream.Collectors;
 
 public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductViewHolder> {
 
@@ -64,6 +66,7 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
     public ProductAdapter(List<ComptesProduct> productList, List<String> productNamesDico) {
         this.productList = productList;
         this.productNamesDico = productNamesDico;
+        recalculateTotal();
     }
 
     @NonNull
@@ -95,15 +98,16 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
         // Set red background if there's a sum mismatch
         if (product.isMismatch()) {
             holder.productCard.setCardBackgroundColor(Color.RED);
-        } else {
-            holder.productCard.setCardBackgroundColor(ContextCompat.getColor(holder.itemView.getContext(), R.color.grey_menu));
         }
-
         // Set yellow background to ticket restaurant products
-        if (product.isTicketRestaurant()) {
+        else if (product.isTicketRestaurant()) {
             holder.productCard.setCardBackgroundColor(
-                    ContextCompat.getColor(holder.itemView.getContext(), R.color.yellow_ticketrestau)
-            );
+                    ContextCompat.getColor(holder.itemView.getContext(), R.color.yellow_ticketrestau));
+        }
+        // Default background : grey
+        else {
+            holder.productCard.setCardBackgroundColor(
+                    ContextCompat.getColor(holder.itemView.getContext(), R.color.grey_menu));
         }
 
         // Switch ticket or product name
@@ -209,6 +213,7 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
         double readCBTotal = 0;
         double readTicketRestaurantTotal = 0;
         int totalCostId = productList.size() - 1;
+        int totalTicketRestaurantId = productList.size() - 1;
 
         // Retrieve all read totals and calculate true total cost
         for (int productId = 0 ; productId < productList.size() ; productId++) {
@@ -224,6 +229,7 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
                         break;
 
                     case TOTAL_TICKETRESTAURANT:
+                        totalTicketRestaurantId = productId;
                         readTicketRestaurantTotal = product.getProductPrice();
                         break;
 
@@ -239,14 +245,46 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
             }
         }
 
+        // Detect which products were bought with Ticket Restaurant
+        if (readTicketRestaurantTotal > 0)
+        {
+            // Reset Ticket Restaurant tag
+            productList.forEach(product -> product.setTicketRestaurant(false));
+
+            // Filter out ticket totals, only keep actual products
+            List<ComptesProduct> ticketRestauList = new ArrayList<>();
+            List<ComptesProduct> filteredProductList = productList.stream()
+                    .filter(product -> product.getTotalType() == null)
+                    .collect(Collectors.toList());
+
+            // Find products bought with Ticket Restaurant from their price and total Ticket Restaurant price
+            if (backtrack(filteredProductList, 0, readTicketRestaurantTotal, ticketRestauList)) {
+                ticketRestauList.forEach(product -> product.setTicketRestaurant(true));
+                productList.get(totalTicketRestaurantId).setTicketRestaurant(true);
+            }
+        }
+
         // Check if the total matches the sum of products
         productList.get(totalCostId).setMismatch(
                 Math.abs(readTotal - readCBTotal - readTicketRestaurantTotal) > 0.001
                         || Math.abs(readTotal - countedTotal) > 0.001
         );
 
-        // Update total card
-        this.notifyItemChanged(totalCostId);
+        // Update cards backgrounds
+        this.notifyDataSetChanged();
+    }
+
+    private boolean backtrack(List<ComptesProduct> prices, int index, double remaining, List<ComptesProduct> subset) {
+        if (Math.abs(remaining) < 0.001) return true;
+        if (index >= prices.size()) return false;
+
+        // include current item
+        subset.add(prices.get(index));
+        if (backtrack(prices, index + 1, remaining - prices.get(index).getProductPrice(), subset)) return true;
+
+        // exclude current item
+        subset.remove(subset.size() - 1);
+        return backtrack(prices, index + 1, remaining, subset);
     }
 
     static class ProductViewHolder extends RecyclerView.ViewHolder {
