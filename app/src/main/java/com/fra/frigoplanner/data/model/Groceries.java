@@ -33,4 +33,8 @@ public class Groceries
     public List<TicketProduct> getProductList() {
         return ticketProductList;
     }
+
+    public int getNumberOfOcurrences() {
+        return this.numberOfOcurrences;
+    }
 }

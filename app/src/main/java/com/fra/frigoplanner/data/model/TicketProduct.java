@@ -17,6 +17,14 @@ public class TicketProduct
     private String validatedName = null;
     private String validatedPrice = null;
 
+    public TicketProduct() {}
+
+    // Only used when knowing for sure the validated names/prices
+    public TicketProduct(String validatedName, String validatedPrice) {
+        this.validatedName = validatedName;
+        this.validatedPrice = validatedPrice;
+    }
+
     public ComptesProduct createValidatedProduct(TicketNameDicoDao dicoDao, ProductTypeDicoDao productTypeDicoDao) {
         TicketNameDico productDico = dicoDao.getByTicketName(this.validatedName);
         String productName = productDico != null ? productDico.productName : "";
@@ -60,6 +68,32 @@ public class TicketProduct
         });
     }
 
+    public void findMostProbableName() {
+        if (validatedName == null) {
+            int numberOfOccurrences = 0;
+
+            for (Map.Entry<String, Integer> entrySet : possibleNames.entrySet()) {
+                if (entrySet.getValue() > numberOfOccurrences) {
+                    numberOfOccurrences = entrySet.getValue();
+                    validatedName = entrySet.getKey();
+                }
+            }
+        }
+    }
+
+    public void findMostProbablePrice() {
+        if (validatedPrice == null) {
+            int numberOfOccurrences = 0;
+
+            for (Map.Entry<String, Integer> entrySet : possiblePrices.entrySet()) {
+                if (entrySet.getValue() > numberOfOccurrences) {
+                    numberOfOccurrences = entrySet.getValue();
+                    validatedPrice = entrySet.getKey();
+                }
+            }
+        }
+    }
+
     public boolean isValidated() {
         return validatedName != null && validatedPrice != null;
     }
@@ -70,5 +104,13 @@ public class TicketProduct
 
     public String getValidatedPrice() {
         return validatedPrice;
+    }
+
+    public void setValidatedName(String validatedName) {
+        this.validatedName = validatedName;
+    }
+
+    public void setValidatedPrice(String validatedPrice) {
+        this.validatedPrice = validatedPrice;
     }
 }

@@ -40,6 +40,7 @@ import com.fra.frigoplanner.data.model.ComptesProduct;
 import com.fra.frigoplanner.data.model.TicketProduct;
 import com.fra.frigoplanner.data.model.TotalType;
 import com.fra.frigoplanner.ui.view.RectView;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.text.Text;
@@ -59,6 +60,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class TicketReaderActivity extends AppCompatActivity {
@@ -68,14 +71,17 @@ public class TicketReaderActivity extends AppCompatActivity {
     private PreviewView previewView;
     private ExecutorService cameraExecutor;
     private TextRecognizer textRecognizer;
-    Map<Integer, Groceries> groceryList = new HashMap<>();
+    private FloatingActionButton validateReading;
+    private Map<Integer, Groceries> groceryList = new HashMap<>();
     private static final String TAG = "FrigoPlanner";
-    int validatedProducts = 0;
+    private static final String PRODUCT_LOT_PATTERN = "(\\d{1,2})[ ]{0,3}X[ ]{0,3}(\\d{1,3}[ ]{0,2}.[ ]{0,2}\\d{2})[ ]{0,3}EUR";
+    private int validatedProducts = 0;
+    private boolean skipReading = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.ticket_reader);
+        setContentView(R.layout.activity_ticket_reader);
 
         // Allow for better integration with top bar
         EdgeToEdge.enable(this);
@@ -97,11 +103,17 @@ public class TicketReaderActivity extends AppCompatActivity {
         previewView = findViewById(R.id.previewView);
         statusText = findViewById(R.id.statusText);
         rectView = findViewById(R.id.rectView);
+        validateReading = findViewById(R.id.validateReading);
 
         // Declare Camera and Text analyser objects
         textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
         cameraExecutor = Executors.newSingleThreadExecutor();
         groceryList = new HashMap<>();
+
+        // Skip reading if pressing the validate button
+        validateReading.setOnClickListener(v -> {
+            skipReading = true;
+        });
 
         startCamera();
     }
@@ -347,12 +359,32 @@ public class TicketReaderActivity extends AppCompatActivity {
                     String ticketName = getClosestTicketName(lineText, ticketNameDico);
 
                     // For lines under the format 2 X 3.45 EUR, update price for previous line
-                    if (ticketName.matches("\\d{1,2}[ ]{1,3}X[ ]{1,3}\\d{1,3}.\\d{2}[ ]{1,3}EUR")) {
+                    if (ticketName.matches(PRODUCT_LOT_PATTERN)) {
                         groceries.getTicketProduct(i - 1).addPriceCandidate(productPriceList.get(i).toString());
                     }
 
                     // Add best match to grocery list and check if the product has been validated
                     validatedProducts += groceries.addProduct(i, ticketName, productPriceList.get(i).toString()) ? 1 : 0;
+                }
+
+                if (skipReading) {
+                    Groceries mostFrequentGrocery = null;
+
+                    // Retrieve most frequent Groceries
+                    for (Map.Entry<Integer, Groceries> groceriesEntry : groceryList.entrySet()) {
+                        if (mostFrequentGrocery == null || groceriesEntry.getValue().getNumberOfOcurrences() > mostFrequentGrocery.getNumberOfOcurrences()) {
+                            mostFrequentGrocery = groceriesEntry.getValue();
+                        }
+                    }
+
+                    // Make sure every name/price is validated
+                    for (TicketProduct product : groceries.getProductList()) {
+                        product.findMostProbableName();
+                        product.findMostProbablePrice();
+                    }
+
+                    groceries = mostFrequentGrocery;
+                    validatedProducts = productNameList.size();
                 }
 
                 // Every product has been validated : return to previous menu
@@ -361,10 +393,37 @@ public class TicketReaderActivity extends AppCompatActivity {
                     ArrayList<ComptesProduct> productList = new ArrayList<>();
                     double totalBimpliCost = 0;
 
-                    // Convert each TicketProduct to Product objects
-                    for (int productId = 0 ; productId < groceries.getProductList().size() ; productId++)
-                    {
+                    // Iterate on each TicketProduct to convert to Product
+                    for (int productId = 0 ; productId < groceries.getProductList().size() ; productId++) {
                         TicketProduct ticketProduct = groceries.getProductList().get(productId);
+
+                        // Particular case : handle product lots (under 3 x 4.56 EUR format)
+                        if (productId < groceries.getProductList().size() - 1)
+                        {
+                            // Check if next product matches the lot format
+                            TicketProduct nextTicketProduct = groceries.getProductList().get(productId + 1);
+                            Matcher productLotMatcher = Pattern.compile(PRODUCT_LOT_PATTERN).matcher(nextTicketProduct.getValidatedName());
+
+                            if (productLotMatcher.matches()) {
+                                int lotQuantity = Integer.parseInt(productLotMatcher.group(1));
+                                String lotPrice = productLotMatcher.group(2).replace(" ","").replace(",",".");
+                                String lotName = ticketProduct.getValidatedName();
+
+                                // Update current and next names/prices with lot name and unit price
+                                nextTicketProduct.setValidatedName(lotName);
+                                nextTicketProduct.setValidatedPrice(lotPrice);
+                                ticketProduct.setValidatedPrice(lotPrice);
+
+                                // Add additional products if more than 2 products in the lot
+                                for (int additionalProductId = 2 ; additionalProductId < lotQuantity ; additionalProductId++) {
+                                    TicketProduct productLot = new TicketProduct(lotName, lotPrice);
+                                    ComptesProduct validatedProductLot = productLot.createValidatedProduct(ticketDicoDao, productTypeDicoDao);
+                                    productList.add(validatedProductLot);
+                                }
+                            }
+                        }
+
+                        // Convert TicketProduct to Product
                         ComptesProduct validatedProduct = ticketProduct.createValidatedProduct(ticketDicoDao, productTypeDicoDao);
                         productList.add(validatedProduct);
 
