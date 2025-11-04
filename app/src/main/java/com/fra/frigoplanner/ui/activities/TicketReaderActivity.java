@@ -378,7 +378,7 @@ public class TicketReaderActivity extends AppCompatActivity {
                     }
 
                     // Make sure every name/price is validated
-                    for (TicketProduct product : groceries.getProductList()) {
+                    for (TicketProduct product : mostFrequentGrocery.getProductList()) {
                         product.findMostProbableName();
                         product.findMostProbablePrice();
                     }
